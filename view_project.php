@@ -223,7 +223,7 @@ $checklist_items = $stmt->get_result();
                                                 default => 'secondary'
                                             };
                                         ?> ms-2">
-                                            <?php echo ucfirst((string)$item['status']); ?>
+                                            <?php echo 'test'. ucfirst((string)$item['status']); ?>
                                         </span>
                                         <?php if ($item['comment_count'] > 0): ?>
                                             <span class="badge bg-info ms-2">
