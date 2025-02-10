@@ -1,6 +1,6 @@
 <?php
-// update_checklist_status.php
-require_once 'config.php';
+
+require_once 'includes/config.php';
 
 if (!isLoggedIn()) {
     header("Location: login.php");

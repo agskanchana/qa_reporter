@@ -1,6 +1,6 @@
 <?php
 // export_report.php
-require_once 'config.php';
+require_once 'includes/config.php';
 
 // Check permissions
 checkPermission(['admin', 'qa_manager']);

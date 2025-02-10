@@ -1,7 +1,7 @@
 <?php
 // view_project.php
-require_once 'config.php';
-
+require_once 'includes/config.php';
+// require_once 'functions.php';
 if (!isLoggedIn()) {
     header("Location: login.php");
     exit();
@@ -40,6 +40,8 @@ if (!$project) {
     exit();
 }
 
+require_once 'includes/functions.php';
+syncProjectChecklist($project_id);
 // Handle status updates
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     $item_id = (int)$_POST['item_id'];
@@ -112,55 +114,24 @@ function updateProjectStatus($conn, $project_id) {
 }
 
 // Get checklist items with their status
-$query = "SELECT ci.*, pcs.status,
+$query = "SELECT ci.*, COALESCE(pcs.status, 'idle') as status,
           (SELECT COUNT(*) FROM comments c
            WHERE c.project_id = ? AND c.checklist_item_id = ci.id) as comment_count
           FROM checklist_items ci
-          LEFT JOIN project_checklist_status pcs ON ci.id = pcs.checklist_item_id AND pcs.project_id = ?
+          LEFT JOIN project_checklist_status pcs
+              ON ci.id = pcs.checklist_item_id
+              AND pcs.project_id = ?
           ORDER BY ci.stage, ci.id";
 $stmt = $conn->prepare($query);
 $stmt->bind_param("ii", $project_id, $project_id);
 $stmt->execute();
 $checklist_items = $stmt->get_result();
+
+require_once 'includes/header.php'
+
 ?>
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>View Project - QA Reporter</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css" rel="stylesheet">
-</head>
-<body>
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container">
-            <a class="navbar-brand" href="#">QA Reporter</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link active" href="dashboard.php">Dashboard</a>
-                    </li>
-                    <?php if (in_array($user_role, ['admin', 'qa_manager'])): ?>
-                    <li class="nav-item">
-                        <a class="nav-link" href="users.php">Users</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="reports.php">Reports</a>
-                    </li>
-                    <?php endif; ?>
-                </ul>
-                <div class="navbar-nav">
-                    <span class="nav-item nav-link text-light">Welcome, <?php echo htmlspecialchars($_SESSION['username']); ?></span>
-                    <a class="nav-link" href="logout.php">Logout</a>
-                </div>
-            </div>
-        </div>
-    </nav>
+
 
     <div class="container mt-4">
         <div class="row mb-4">
@@ -223,7 +194,7 @@ $checklist_items = $stmt->get_result();
                                                 default => 'secondary'
                                             };
                                         ?> ms-2">
-                                            <?php echo 'test'. ucfirst((string)$item['status']); ?>
+                                            <?php echo ucfirst((string)$item['status']); ?>
                                         </span>
                                         <?php if ($item['comment_count'] > 0): ?>
                                             <span class="badge bg-info ms-2">
@@ -285,7 +256,7 @@ $checklist_items = $stmt->get_result();
                                                 </div>
                                             </div>
 
-                                            <div class="mt-3">
+                                            <div class="mt-3 mb-3">
                                                 <textarea name="comment" class="form-control" placeholder="Add a comment (optional)"
                                                         <?php echo $isDisabled ? 'disabled' : ''; ?>></textarea>
                                             </div>
@@ -305,18 +276,21 @@ $checklist_items = $stmt->get_result();
                                             $comments = $stmt->get_result();
 
                                             while ($comment = $comments->fetch_assoc()):
-                                                $commentClass = $comment['role'] === 'webmaster' ? 'border-primary' : 'border-warning';
-                                                $textClass = $comment['role'] === 'webmaster' ? 'text-primary' : 'text-warning';
+                                                // Set alert class based on user role
+                                                $alertClass = match($comment['role']) {
+                                                    'webmaster' => 'alert-primary',
+                                                    'qa_reporter', 'qa_manager' => 'alert-warning',
+                                                    'admin' => 'alert-info',
+                                                    default => 'alert-secondary'
+                                                };
                                             ?>
-                                                <div class="card mb-2 border-start border-4 <?php echo $commentClass; ?>">
-                                                    <div class="card-body">
-                                                        <p class="card-text"><?php echo htmlspecialchars($comment['comment']); ?></p>
-                                                        <small class="<?php echo $textClass; ?>">
-                                                            By <?php echo htmlspecialchars($comment['username']); ?>
-                                                            (<?php echo ucfirst($comment['role']); ?>) -
-                                                            <?php echo date('Y-m-d H:i:s', strtotime($comment['created_at'])); ?>
-                                                        </small>
-                                                    </div>
+                                                <div class="alert <?php echo $alertClass; ?> mb-2">
+                                                    <p class="mb-1"><?php echo htmlspecialchars($comment['comment']); ?></p>
+                                                    <small>
+                                                        By <?php echo htmlspecialchars($comment['username']); ?>
+                                                        (<?php echo ucfirst($comment['role']); ?>) -
+                                                        <?php echo date('Y-m-d H:i:s', strtotime($comment['created_at'])); ?>
+                                                    </small>
                                                 </div>
                                             <?php endwhile; ?>
                                         </div>
@@ -336,9 +310,17 @@ $checklist_items = $stmt->get_result();
             </div>
         </div>
     </div>
-
+    <?php
+    $current_user_query = "SELECT username FROM users WHERE id = ?";
+    $stmt = $conn->prepare($current_user_query);
+    $stmt->bind_param("i", $_SESSION['user_id']);
+    $stmt->execute();
+    $current_user_result = $stmt->get_result();
+    $current_user = $current_user_result->fetch_assoc();
+?>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        const currentUserName = <?php echo json_encode($current_user['username']); ?>;
 document.querySelectorAll('form[data-status-form]').forEach(form => {
     form.addEventListener('submit', function(e) {
         e.preventDefault();
@@ -399,7 +381,7 @@ document.querySelectorAll('form[data-status-form]').forEach(form => {
                     const commentsSection = itemRow.querySelector('.comments-section');
                     if (commentsSection) {
                         const newComment = document.createElement('div');
-                        newComment.className = 'card mb-2';
+                        newComment.className = 'card mb-2 mt-2';
                         newComment.innerHTML = `
                             <div class="card-body">
                                 <p class="card-text">${commentText.value}</p>

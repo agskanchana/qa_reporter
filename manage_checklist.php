@@ -1,9 +1,11 @@
 <?php
 // manage_checklist.php
-require_once 'config.php';
-
+require_once 'includes/config.php';
+require_once 'includes/functions.php';
 // Check permissions
 checkPermission(['admin', 'qa_manager']);
+$user_role = getUserRole();
+$user_id = $_SESSION['user_id'];
 
 $error = '';
 $success = '';
@@ -24,6 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $stmt->bind_param("ssssi", $title, $stage, $how_to_check, $how_to_fix, $_SESSION['user_id']);
 
                 if ($stmt->execute()) {
+                    syncProjectChecklist();
                     $success = "Checklist item added successfully!";
                 } else {
                     $error = "Error adding checklist item: " . $conn->error;
@@ -85,45 +88,9 @@ $query = "SELECT ci.*, u.username as created_by_name,
           LEFT JOIN users u ON ci.created_by = u.id
           ORDER BY ci.stage, ci.title";
 $checklist_items = $conn->query($query);
+require_once 'includes/header.php';
 ?>
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manage Checklist - QA Reporter</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css" rel="stylesheet">
-</head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container">
-            <a class="navbar-brand" href="#">QA Reporter</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="dashboard.php">Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="users.php">Users</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="reports.php">Reports</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link active" href="manage_checklist.php">Checklist</a>
-                    </li>
-                </ul>
-                <div class="navbar-nav">
-                    <a class="nav-link" href="logout.php">Logout</a>
-                </div>
-            </div>
-        </div>
-    </nav>
 
     <div class="container mt-4">
         <div class="row mb-4">
