@@ -2,14 +2,6 @@
 
 require_once 'includes/config.php';
 
-function getAdminUserId($conn) {
-    $stmt = $conn->prepare("SELECT id FROM users WHERE username = 'admin'");
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $admin = $result->fetch_assoc();
-    return $admin ? $admin['id'] : null;
-}
-
 if (!isLoggedIn()) {
     header("Location: login.php");
     exit();
@@ -153,51 +145,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt = $conn->prepare($query);
             $stmt->bind_param("si", $new_project_status, $project_id);
             $stmt->execute();
-
-            // Handle QA assignments based on status changes
-            if ($new_project_status === 'wp_conversion_qa') {
-                // Assign to admin user for WP conversion QA
-                $admin_id = getAdminUserId($conn);
-                if ($admin_id) {
-                    // First delete any existing assignment
-                    $delete_query = "DELETE FROM qa_assignments WHERE project_id = ?";
-                    $stmt = $conn->prepare($delete_query);
-                    $stmt->bind_param("i", $project_id);
-                    $stmt->execute();
-
-                    // Then create new assignment to admin
-                    $assign_query = "INSERT INTO qa_assignments (project_id, qa_user_id, assigned_by)
-                                   VALUES (?, ?, ?)";
-                    $stmt = $conn->prepare($assign_query);
-                    $stmt->bind_param("iii", $project_id, $admin_id, $_SESSION['user_id']);
-                    $stmt->execute();
-                }
-            }
-            elseif ($new_project_status === 'page_creation' && $current_project_status === 'wp_conversion_qa') {
-                // Clear QA assignment when moving from wp_conversion_qa to page_creation
-                $delete_query = "DELETE FROM qa_assignments WHERE project_id = ?";
-                $stmt = $conn->prepare($delete_query);
-                $stmt->bind_param("i", $project_id);
-                $stmt->execute();
-            }
-            elseif ($new_project_status === 'golive') {
-                // Assign to admin user for golive QA
-                $admin_id = getAdminUserId($conn);
-                if ($admin_id) {
-                    // First delete any existing assignment
-                    $delete_query = "DELETE FROM qa_assignments WHERE project_id = ?";
-                    $stmt = $conn->prepare($delete_query);
-                    $stmt->bind_param("i", $project_id);
-                    $stmt->execute();
-
-                    // Then create new assignment to admin
-                    $assign_query = "INSERT INTO qa_assignments (project_id, qa_user_id, assigned_by)
-                                   VALUES (?, ?, ?)";
-                    $stmt = $conn->prepare($assign_query);
-                    $stmt->bind_param("iii", $project_id, $admin_id, $_SESSION['user_id']);
-                    $stmt->execute();
-                }
-            }
         }
 
         $conn->commit();

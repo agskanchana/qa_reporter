@@ -76,24 +76,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
 // Function to update project status based on checklist items
 function updateProjectStatus($conn, $project_id) {
     $query = "SELECT
-                current_status,
-                (SELECT COUNT(*) FROM project_checklist_status pcs
-                 JOIN checklist_items ci ON pcs.checklist_item_id = ci.id
-                 WHERE pcs.project_id = p.id
-                 AND ci.stage = 'wp_conversion'
-                 AND pcs.status = 'fixed') as wp_fixed_count,
-                (SELECT COUNT(*) FROM project_checklist_status pcs
-                 JOIN checklist_items ci ON pcs.checklist_item_id = ci.id
-                 WHERE pcs.project_id = p.id
-                 AND ci.stage = 'wp_conversion'
-                 AND pcs.status IN ('passed', 'failed')) as wp_qa_count
-              FROM projects p
-              WHERE id = ?";
+    current_status,
+    (SELECT COUNT(*) FROM project_checklist_status pcs
+     JOIN checklist_items ci ON pcs.checklist_item_id = ci.id
+     WHERE pcs.project_id = p.id
+     AND ci.stage = 'wp_conversion'
+     AND pcs.status = 'fixed') as wp_fixed_count,
+    (SELECT COUNT(*) FROM project_checklist_status pcs
+     JOIN checklist_items ci ON pcs.checklist_item_id = ci.id
+     WHERE pcs.project_id = p.id
+     AND ci.stage = 'wp_conversion'
+     AND pcs.status IN ('passed', 'failed')) as wp_qa_count
+  FROM projects p
+  WHERE id = ?";
 
-    $stmt = $conn->prepare($query);
-    $stmt->bind_param("i", $project_id);
-    $stmt->execute();
-    $result = $stmt->get_result()->fetch_assoc();
+$stmt = $conn->prepare($query);
+$stmt->bind_param("i", $project_id);
+$stmt->execute();
+$result = $stmt->get_result()->fetch_assoc();
 
     // Update status based on conditions
     $new_status = $result['current_status'];
@@ -118,7 +118,7 @@ $query = "SELECT ci.*, COALESCE(pcs.status, 'idle') as status,
           (SELECT COUNT(*) FROM comments c
            WHERE c.project_id = ? AND c.checklist_item_id = ci.id) as comment_count
           FROM checklist_items ci
-          LEFT JOIN project_checklist_status pcs
+          JOIN project_checklist_status pcs  -- Changed LEFT JOIN to JOIN to only show items in this project
               ON ci.id = pcs.checklist_item_id
               AND pcs.project_id = ?
           ORDER BY ci.stage, ci.id";
@@ -141,7 +141,14 @@ require_once 'includes/header.php'
                     Status: <span class="badge bg-primary project-status-badge">
                         <?php echo ucfirst(str_replace('_', ' ', $project['current_status'])); ?>
                     </span>
-                    Webmaster: <?php echo htmlspecialchars($project['webmaster_name']); ?>
+                    Webmaster: <?php
+                    if($project['webmaster_name']){
+                    echo htmlspecialchars($project['webmaster_name']);
+                    }else{
+                        echo '<span class="badge bg-danger">
+                                                Deleted User</span>';
+                    }
+                     ?>
                 </p>
             </div>
         </div>
@@ -186,7 +193,10 @@ require_once 'includes/header.php'
                                             data-bs-toggle="collapse"
                                             data-bs-target="#item<?php echo $item['id']; ?>">
                                         <?php echo htmlspecialchars($item['title']); ?>
-                                        <span class="badge bg-<?php
+                                        <?php if ($item['is_archived']): ?>
+        <span class="badge bg-secondary ms-2" title="This item has been archived">Archived</span>
+    <?php endif; ?>
+                                       <span class="badge bg-<?php
                                             echo match($item['status']) {
                                                 'passed' => 'success',
                                                 'failed' => 'danger',

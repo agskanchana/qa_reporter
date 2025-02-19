@@ -53,16 +53,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 }
                 break;
 
-                case 'delete':
-                    $item_id = (int)$_POST['item_id'];
+            case 'delete':
+                $item_id = (int)$_POST['item_id'];
 
-                    try {
-                        removeChecklistItemSafely($item_id);
-                        $success = "Checklist item archived successfully!";
-                    } catch (Exception $e) {
-                        $error = "Error archiving checklist item: " . $e->getMessage();
-                    }
-                    break;
+                try {
+                    removeChecklistItemFromProjects($item_id);
+                    $success = "Checklist item deleted successfully!";
+                } catch (Exception $e) {
+                    $error = "Error deleting checklist item: " . $e->getMessage();
+                }
+                break;
         }
     }
 }
@@ -71,16 +71,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 $query = "SELECT ci.*, u.username as created_by_name,
           (SELECT COUNT(DISTINCT pcs.project_id)
            FROM project_checklist_status pcs
-           WHERE pcs.checklist_item_id = ci.id
-           AND pcs.is_archived = 0) as usage_count,
+           WHERE pcs.checklist_item_id = ci.id) as usage_count,
           (SELECT COUNT(*)
            FROM comments c
            WHERE c.checklist_item_id = ci.id) as comment_count
           FROM checklist_items ci
           LEFT JOIN users u ON ci.created_by = u.id
-          WHERE ci.is_archived = 0
           ORDER BY ci.stage, ci.title";
-$checklist_items = $conn->query($query); // Add this line to execute the query and store the result
+$checklist_items = $conn->query($query);
 require_once 'includes/header.php';
 ?>
 
@@ -158,14 +156,19 @@ require_once 'includes/header.php';
                                                     onclick="editItem(<?php echo htmlspecialchars(json_encode($item)); ?>)">
                                                 <i class="bi bi-pencil"></i> Edit
                                             </button>
-                                            <button type="button" class="btn btn-sm btn-warning"
-                                                    onclick="showDeleteConfirmation(
-                                                        <?php echo $item['id']; ?>,
-                                                        '<?php echo htmlspecialchars(addslashes($item['title'])); ?>',
-                                                        <?php echo $item['usage_count']; ?>
-                                                    )">
-                                                <i class="bi bi-archive"></i> Archive
-                                            </button>
+                                            <?php if ($item['usage_count'] == 0): ?>
+                                                <button type="button" class="btn btn-sm btn-danger"
+                                                        onclick="showDeleteConfirmation(<?php echo $item['id']; ?>,
+                                                                '<?php echo htmlspecialchars(addslashes($item['title'])); ?>',
+                                                                <?php echo $item['usage_count']; ?>)">
+                                                    <i class="bi bi-trash"></i> Delete
+                                                </button>
+                                            <?php else: ?>
+                                                <button type="button" class="btn btn-sm btn-danger" disabled
+                                                        title="Cannot delete: Item is being used in <?php echo $item['usage_count']; ?> project(s)">
+                                                    <i class="bi bi-trash"></i> Delete
+                                                </button>
+                                            <?php endif; ?>
                                         </td>
                                     </tr>
                                     <?php
@@ -278,26 +281,22 @@ require_once 'includes/header.php';
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Archive Checklist Item</h5>
+                <h5 class="modal-title">Confirm Deletion</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p>Are you sure you want to archive this checklist item?</p>
-                <div class="alert alert-info">
-                    <i class="bi bi-info-circle"></i> This will:
+                <p>Are you sure you want to delete this checklist item?</p>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i> This will:
                     <ul>
-                        <li>Remove the item from future projects</li>
-                        <li>Maintain existing project data and history</li>
-                        <li>Preserve all associated comments</li>
-                        <li>Not affect current project progress</li>
+                        <li>Remove the item from all projects</li>
+                        <li>Delete all associated comments</li>
+                        <li>Delete all status history</li>
                     </ul>
+                    This action cannot be undone.
                 </div>
-                <div class="item-details mb-3">
+                <div class="item-details">
                     <strong>Item:</strong> <span id="delete-item-title"></span>
-                </div>
-                <div id="usage-info" class="alert alert-warning">
-                    This item is currently used in <span id="usage-count"></span> project(s).
-                    Archiving will maintain existing data but remove it from active use.
                 </div>
             </div>
             <div class="modal-footer">
@@ -305,13 +304,12 @@ require_once 'includes/header.php';
                     <input type="hidden" name="action" value="delete">
                     <input type="hidden" name="item_id" id="delete-item-id">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-warning">Archive Item</button>
+                    <button type="submit" class="btn btn-danger">Delete</button>
                 </form>
             </div>
         </div>
     </div>
 </div>
-
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -335,10 +333,9 @@ require_once 'includes/header.php';
         function showDeleteConfirmation(itemId, itemTitle, usageCount) {
             document.getElementById('delete-item-id').value = itemId;
             document.getElementById('delete-item-title').textContent = itemTitle;
-            document.getElementById('usage-count').textContent = usageCount;
-            document.getElementById('usage-info').style.display = usageCount > 0 ? 'block' : 'none';
 
-            new bootstrap.Modal(document.getElementById('deleteConfirmModal')).show();
+            const modal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+            modal.show();
         }
     </script>
 </body>

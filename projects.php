@@ -7,7 +7,7 @@ checkPermission(['admin']);
 $user_role = getUserRole();
 
 // Pagination settings
-$items_per_page = 5;
+$items_per_page = 10;
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 $offset = ($page - 1) * $items_per_page;
 
@@ -45,16 +45,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
                 $conn->begin_transaction();
                 try {
-                    $query = "INSERT INTO projects (name, webmaster_id, current_status) VALUES (?, ?, 'wp_conversion')";
-                    $stmt = $conn->prepare($query);
-                    $stmt->bind_param("si", $project_name, $webmaster_id);
-                    $stmt->execute();
+                     // Insert project
+                        $query = "INSERT INTO projects (name, webmaster_id, current_status) VALUES (?, ?, 'wp_conversion')";
+                        $stmt = $conn->prepare($query);
+                        $stmt->bind_param("si", $project_name, $webmaster_id);
+                        $stmt->execute();
 
-                    $project_id = $conn->insert_id;
-                    syncProjectChecklist($project_id);
+                        $project_id = $conn->insert_id;
 
-                    $conn->commit();
-                    $success = "Project created successfully!";
+                        // Insert only non-archived checklist items for new projects
+                        $query = "INSERT INTO project_checklist_status (project_id, checklist_item_id, status)
+                                SELECT ?, id, 'idle'
+                                FROM checklist_items
+                                WHERE is_archived = 0";
+                        $stmt = $conn->prepare($query);
+                        $stmt->bind_param("i", $project_id);
+                        $stmt->execute();
+
+                        $conn->commit();
+                        $success = "Project created successfully!";
                 } catch (Exception $e) {
                     $conn->rollback();
                     $error = "Error creating project: " . $e->getMessage();
@@ -187,7 +196,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             <?php while ($project = $projects->fetch_assoc()): ?>
                             <tr>
                                 <td><?php echo htmlspecialchars($project['name']); ?></td>
-                                <td><?php echo htmlspecialchars($project['webmaster_name']); ?></td>
+                                <td><?php
+                                if($project['webmaster_name'] == null){
+                                    echo '<span class="badge bg-danger">
+                                                Deleted User</span>';
+                                }else{
+                                echo htmlspecialchars($project['webmaster_name']);
+                                }
+                                 ?></td>
                                 <td>
                                     <span class="badge bg-primary">
                                         <?php echo ucfirst(str_replace('_', ' ', $project['current_status'])); ?>

@@ -1,6 +1,6 @@
 <?php
 require_once 'includes/config.php';
-
+require_once 'includes/functions.php';
 // Check permissions
 $user_role = getUserRole();
 $user_id = $_SESSION['user_id'];
@@ -45,49 +45,7 @@ function getWebmasterStats($conn, $start_date, $end_date) {
 }
 
 // Add this function after your existing functions
-function getDetailedWebmasterProjects($conn, $start_date, $end_date) {
-    $query = "SELECT
-                u.id as webmaster_id,
-                u.username as webmaster_name,
-                p.id as project_id,
-                p.name as project_name,
-                p.created_at,
-                p.current_status,
-                (SELECT COUNT(*)
-                 FROM project_checklist_status pcs
-                 JOIN checklist_items ci ON pcs.checklist_item_id = ci.id
-                 WHERE pcs.project_id = p.id AND ci.stage = 'wp_conversion'
-                 AND pcs.status IN ('passed', 'fixed')) as wp_items_completed,
-                (SELECT COUNT(*)
-                 FROM checklist_items
-                 WHERE stage = 'wp_conversion') as total_wp_items,
-                (SELECT COUNT(*)
-                 FROM project_checklist_status pcs
-                 JOIN checklist_items ci ON pcs.checklist_item_id = ci.id
-                 WHERE pcs.project_id = p.id AND ci.stage = 'page_creation'
-                 AND pcs.status IN ('passed', 'fixed')) as page_items_completed,
-                (SELECT COUNT(*)
-                 FROM checklist_items
-                 WHERE stage = 'page_creation') as total_page_items,
-                (SELECT COUNT(*)
-                 FROM project_checklist_status pcs
-                 JOIN checklist_items ci ON pcs.checklist_item_id = ci.id
-                 WHERE pcs.project_id = p.id AND ci.stage = 'golive'
-                 AND pcs.status IN ('passed', 'fixed')) as golive_items_completed,
-                (SELECT COUNT(*)
-                 FROM checklist_items
-                 WHERE stage = 'golive') as total_golive_items
-              FROM users u
-              LEFT JOIN projects p ON u.id = p.webmaster_id
-                   AND p.created_at BETWEEN ? AND ?
-              WHERE u.role = 'webmaster'
-              ORDER BY u.username, p.created_at DESC";
 
-    $stmt = $conn->prepare($query);
-    $stmt->bind_param("ss", $start_date, $end_date);
-    $stmt->execute();
-    return $stmt->get_result();
-}
 
 // Get detailed statistics
 $detailed_stats = getDetailedWebmasterProjects($conn, $start_date, $end_date);

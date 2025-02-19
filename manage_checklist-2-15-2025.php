@@ -80,7 +80,6 @@ $query = "SELECT ci.*, u.username as created_by_name,
           LEFT JOIN users u ON ci.created_by = u.id
           WHERE ci.is_archived = 0
           ORDER BY ci.stage, ci.title";
-$checklist_items = $conn->query($query); // Add this line to execute the query and store the result
 require_once 'includes/header.php';
 ?>
 
