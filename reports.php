@@ -17,26 +17,32 @@ $webmasters = $conn->query($webmasters_query);
 // Function to get webmaster performance statistics
 function getWebmasterStats($conn, $start_date, $end_date) {
     $query = "SELECT
-                u.id as webmaster_id,
-                u.username as webmaster_name,
-                COUNT(DISTINCT CASE
-                    WHEN p.current_status IN ('page_creation', 'page_creation_qa', 'golive', 'golive_qa', 'completed')
-                    THEN p.id
-                    END) as wp_conversions,
-                COUNT(DISTINCT CASE
-                    WHEN p.current_status IN ('golive', 'golive_qa', 'completed')
-                    THEN p.id
-                    END) as page_creations,
-                COUNT(DISTINCT CASE
-                    WHEN p.current_status = 'completed'
-                    THEN p.id
-                    END) as completed_projects
-              FROM users u
-              LEFT JOIN projects p ON u.id = p.webmaster_id
-                   AND p.updated_at BETWEEN ? AND ?
-              WHERE u.role = 'webmaster'
-              GROUP BY u.id, u.username
-              ORDER BY completed_projects DESC, page_creations DESC, wp_conversions DESC";
+        u.id as webmaster_id,
+        u.username as webmaster_name,
+        COUNT(DISTINCT CASE
+            WHEN p.current_status IN ('wp_conversion', 'wp_conversion_qa')
+            THEN p.id
+        END) as wp_conversions,
+        COUNT(DISTINCT CASE
+            WHEN p.current_status IN ('page_creation', 'page_creation_qa')
+            THEN p.id
+        END) as page_creations,
+        COUNT(DISTINCT CASE
+            WHEN p.current_status IN ('golive', 'golive_qa')
+            THEN p.id
+        END) as golive_projects,
+        COUNT(DISTINCT CASE
+            WHEN p.current_status = 'completed'
+            THEN p.id
+        END) as completed_projects,
+        COUNT(DISTINCT p.id) as total_projects
+    FROM users u
+    LEFT JOIN projects p ON u.id = p.webmaster_id
+        AND DATE(p.created_at) BETWEEN ? AND ?
+    WHERE u.role = 'webmaster'
+    GROUP BY u.id, u.username
+    ORDER BY completed_projects DESC, golive_projects DESC,
+             page_creations DESC, wp_conversions DESC";
 
     $stmt = $conn->prepare($query);
     $stmt->bind_param("ss", $start_date, $end_date);
@@ -46,9 +52,6 @@ function getWebmasterStats($conn, $start_date, $end_date) {
 
 // Add this function after your existing functions
 
-
-// Get detailed statistics
-$detailed_stats = getDetailedWebmasterProjects($conn, $start_date, $end_date);
 
 // Get statistics
 $webmaster_stats = getWebmasterStats($conn, $start_date, $end_date);
@@ -135,54 +138,89 @@ require_once 'includes/header.php';
                     <thead>
                         <tr>
                             <th>Webmaster</th>
-                            <th class="text-center">WP Conversions</th>
-                            <th class="text-center">Page Creations</th>
-                            <th class="text-center">Completed Projects</th>
-                            <th class="text-center">Performance Chart</th>
+                            <th class="text-center">Active Projects</th>
+                            <th class="text-center">Project Stages</th>
+                            <th class="text-center">Completed</th>
+                            <th class="text-center">Progress</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php
                         $webmaster_stats->data_seek(0);
                         while ($stat = $webmaster_stats->fetch_assoc()):
+                            $active_projects = $stat['wp_conversions'] + $stat['page_creations'] + $stat['golive_projects'];
                         ?>
                         <tr>
-                            <td><?php echo htmlspecialchars($stat['webmaster_name']); ?></td>
+                            <td>
+                                <a href="webmaster_report.php?id=<?php echo $stat['webmaster_id']; ?>&start_date=<?php echo $start_date; ?>&end_date=<?php echo $end_date; ?>">
+                                    <?php echo htmlspecialchars($stat['webmaster_name']); ?>
+                                </a>
+                            </td>
                             <td class="text-center">
-                                <span class="badge bg-info">
-                                    <?php echo $stat['wp_conversions']; ?>
+                                <span class="badge bg-primary">
+                                    <?php echo $active_projects; ?>
                                 </span>
                             </td>
                             <td class="text-center">
-                                <span class="badge bg-warning text-dark">
-                                    <?php echo $stat['page_creations']; ?>
-                                </span>
+                                <?php if ($stat['wp_conversions'] > 0): ?>
+                                    <span class="badge bg-info" title="WP Conversion">
+                                        <?php echo $stat['wp_conversions']; ?> WP
+                                    </span>
+                                <?php endif; ?>
+                                <?php if ($stat['page_creations'] > 0): ?>
+                                    <span class="badge bg-warning text-dark" title="Page Creation">
+                                        <?php echo $stat['page_creations']; ?> Page
+                                    </span>
+                                <?php endif; ?>
+                                <?php if ($stat['golive_projects'] > 0): ?>
+                                    <span class="badge bg-success" title="Golive">
+                                        <?php echo $stat['golive_projects']; ?> Live
+                                    </span>
+                                <?php endif; ?>
                             </td>
                             <td class="text-center">
-                                <span class="badge bg-success">
+                                <span class="badge bg-dark">
                                     <?php echo $stat['completed_projects']; ?>
                                 </span>
                             </td>
                             <td>
                                 <div class="progress">
-                                    <?php if ($total_wp > 0): ?>
-                                    <div class="progress-bar bg-info"
-                                         style="width: <?php echo ($stat['wp_conversions']/$total_wp)*100; ?>%"
-                                         title="WP Conversions">
-                                    </div>
-                                    <?php endif; ?>
-                                    <?php if ($total_page > 0): ?>
-                                    <div class="progress-bar bg-warning"
-                                         style="width: <?php echo ($stat['page_creations']/$total_page)*100; ?>%"
-                                         title="Page Creations">
-                                    </div>
-                                    <?php endif; ?>
-                                    <?php if ($total_completed > 0): ?>
-                                    <div class="progress-bar bg-success"
-                                         style="width: <?php echo ($stat['completed_projects']/$total_completed)*100; ?>%"
-                                         title="Completed">
-                                    </div>
-                                    <?php endif; ?>
+                                    <?php
+                                    $total = $stat['total_projects'];
+                                    if ($total > 0):
+                                        if ($stat['wp_conversions'] > 0):
+                                            $wp_percent = ($stat['wp_conversions']/$total)*100;
+                                    ?>
+                                        <div class="progress-bar bg-info"
+                                             style="width: <?php echo $wp_percent; ?>%"
+                                             title="WP Conversion: <?php echo $stat['wp_conversions']; ?>">
+                                        </div>
+                                    <?php endif;
+                                        if ($stat['page_creations'] > 0):
+                                            $page_percent = ($stat['page_creations']/$total)*100;
+                                    ?>
+                                        <div class="progress-bar bg-warning"
+                                             style="width: <?php echo $page_percent; ?>%"
+                                             title="Page Creation: <?php echo $stat['page_creations']; ?>">
+                                        </div>
+                                    <?php endif;
+                                        if ($stat['golive_projects'] > 0):
+                                            $golive_percent = ($stat['golive_projects']/$total)*100;
+                                    ?>
+                                        <div class="progress-bar bg-success"
+                                             style="width: <?php echo $golive_percent; ?>%"
+                                             title="Golive: <?php echo $stat['golive_projects']; ?>">
+                                        </div>
+                                    <?php endif;
+                                        if ($stat['completed_projects'] > 0):
+                                            $completed_percent = ($stat['completed_projects']/$total)*100;
+                                    ?>
+                                        <div class="progress-bar bg-dark"
+                                             style="width: <?php echo $completed_percent; ?>%"
+                                             title="Completed: <?php echo $stat['completed_projects']; ?>">
+                                        </div>
+                                    <?php endif;
+                                    endif; ?>
                                 </div>
                             </td>
                         </tr>
@@ -193,144 +231,29 @@ require_once 'includes/header.php';
         </div>
     </div>
 
-
-    <!-- Detailed Project Progress Section -->
-<div class="card mt-4">
-    <div class="card-header">
-        <h5 class="card-title">Detailed Project Progress by Webmaster</h5>
-    </div>
-    <div class="card-body">
-        <div class="accordion" id="webmasterAccordion">
-            <?php
-            $current_webmaster = null;
-            $detailed_stats->data_seek(0);
-            while ($project = $detailed_stats->fetch_assoc()):
-                if ($current_webmaster !== $project['webmaster_id']):
-                    if ($current_webmaster !== null): ?>
-                        </div></div></div>
-                    <?php endif;
-                    $current_webmaster = $project['webmaster_id'];
-            ?>
-                <div class="accordion-item">
-                    <h2 class="accordion-header">
-                        <button class="accordion-button collapsed" type="button"
-                                data-bs-toggle="collapse"
-                                data-bs-target="#webmaster<?php echo $project['webmaster_id']; ?>">
-                            <?php echo htmlspecialchars($project['webmaster_name']); ?>
-                        </button>
-                    </h2>
-                    <div id="webmaster<?php echo $project['webmaster_id']; ?>"
-                         class="accordion-collapse collapse"
-                         data-bs-parent="#webmasterAccordion">
-                        <div class="accordion-body">
-            <?php endif; ?>
-
-            <?php if ($project['project_id']): ?>
-                <div class="card mb-3">
-                    <div class="card-header">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <h6 class="mb-0"><?php echo htmlspecialchars($project['project_name']); ?></h6>
-                            <small class="text-muted">
-                                Created: <?php echo date('Y-m-d', strtotime($project['created_at'])); ?>
-                            </small>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <!-- WP Conversion Progress -->
-                        <div class="mb-3">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <label class="form-label">WP Conversion</label>
-                                <span class="badge bg-info">
-                                    <?php echo $project['wp_items_completed']; ?>/<?php echo $project['total_wp_items']; ?>
-                                </span>
-                            </div>
-                            <div class="progress">
-                                <div class="progress-bar bg-info"
-                                     style="width: <?php echo ($project['wp_items_completed']/$project['total_wp_items'])*100; ?>%">
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Page Creation Progress -->
-                        <div class="mb-3">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <label class="form-label">Page Creation</label>
-                                <span class="badge bg-warning text-dark">
-                                    <?php echo $project['page_items_completed']; ?>/<?php echo $project['total_page_items']; ?>
-                                </span>
-                            </div>
-                            <div class="progress">
-                                <div class="progress-bar bg-warning"
-                                     style="width: <?php echo ($project['page_items_completed']/$project['total_page_items'])*100; ?>%">
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Golive Progress -->
-                        <div class="mb-3">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <label class="form-label">Golive</label>
-                                <span class="badge bg-success">
-                                    <?php echo $project['golive_items_completed']; ?>/<?php echo $project['total_golive_items']; ?>
-                                </span>
-                            </div>
-                            <div class="progress">
-                                <div class="progress-bar bg-success"
-                                     style="width: <?php echo ($project['golive_items_completed']/$project['total_golive_items'])*100; ?>%">
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Current Status -->
-                        <div class="mt-3">
-                            <strong>Current Status:</strong>
-                            <span class="badge bg-<?php
-                                echo match($project['current_status']) {
-                                    'wp_conversion' => 'info',
-                                    'page_creation' => 'warning',
-                                    'golive' => 'primary',
-                                    'completed' => 'success',
-                                    default => 'secondary'
-                                };
-                            ?>">
-                                <?php echo ucfirst(str_replace('_', ' ', $project['current_status'])); ?>
-                            </span>
-                        </div>
-                    </div>
+    <div class="row mt-4">
+        <!-- Existing Performance Chart -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">Performance Visualization</h5>
                 </div>
-            <?php endif; ?>
-
-            <?php endwhile; ?>
-            <?php if ($current_webmaster !== null): ?>
-                    </div>
+                <div class="card-body">
+                    <canvas id="performanceChart"></canvas>
                 </div>
             </div>
-            <?php endif; ?>
         </div>
-    </div>
-</div>
 
-<style>
-.progress {
-    height: 20px;
-    margin-bottom: 10px;
-}
-.accordion-button:not(.collapsed) {
-    background-color: #f8f9fa;
-    color: #0d6efd;
-}
-.card-header {
-    background-color: #f8f9fa;
-}
-</style>
-
-    <!-- Performance Chart -->
-    <div class="card mt-4">
-        <div class="card-header">
-            <h5 class="card-title">Performance Visualization</h5>
-        </div>
-        <div class="card-body">
-            <canvas id="performanceChart"></canvas>
+        <!-- Project Distribution Pie Chart -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">Project Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="distributionChart"></canvas>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -391,6 +314,53 @@ require_once 'includes/header.php';
                     beginAtZero: true,
                     ticks: {
                         stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+
+    <?php
+    $webmaster_stats->data_seek(0);
+    $pie_labels = [];
+    $pie_data = [];
+    $pie_colors = [];
+
+    while ($stat = $webmaster_stats->fetch_assoc()) {
+        $total_projects = $stat['wp_conversions'] + $stat['page_creations'] + $stat['completed_projects'];
+        if ($total_projects > 0) {
+            $pie_labels[] = $stat['webmaster_name'];
+            $pie_data[] = $total_projects;
+            $pie_colors[] = sprintf('#%06X', mt_rand(0, 0xFFFFFF));
+        }
+    }
+    ?>
+
+    // Add the distribution chart
+    const pieCtx = document.getElementById('distributionChart').getContext('2d');
+    new Chart(pieCtx, {
+        type: 'pie',
+        data: {
+            labels: <?php echo json_encode($pie_labels); ?>,
+            datasets: [{
+                data: <?php echo json_encode($pie_data); ?>,
+                backgroundColor: <?php echo json_encode($pie_colors); ?>,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((context.raw / total) * 100).toFixed(1);
+                            return `${context.label}: ${context.raw} (${percentage}%)`;
+                        }
                     }
                 }
             }

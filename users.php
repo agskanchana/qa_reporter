@@ -12,16 +12,29 @@ $success = '';
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] == 'create') {
         $username = $conn->real_escape_string($_POST['username']);
+        $email = $conn->real_escape_string($_POST['email']);
         $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
         $role = $conn->real_escape_string($_POST['role']);
 
-        $stmt = $conn->prepare("INSERT INTO users (username, password, role) VALUES (?, ?, ?)");
-        $stmt->bind_param("sss", $username, $password, $role);
+        // Double-check both email and username
+        $check_query = "SELECT COUNT(*) as count FROM users WHERE email = ? OR username = ?";
+        $check_stmt = $conn->prepare($check_query);
+        $check_stmt->bind_param("ss", $email, $username);
+        $check_stmt->execute();
+        $result = $check_stmt->get_result();
+        $count = $result->fetch_assoc()['count'];
 
-        if ($stmt->execute()) {
-            $success = "User created successfully!";
+        if ($count > 0) {
+            $error = "Username or email already exists!";
         } else {
-            $error = "Error creating user: " . $conn->error;
+            $stmt = $conn->prepare("INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)");
+            $stmt->bind_param("ssss", $username, $email, $password, $role);
+
+            if ($stmt->execute()) {
+                $success = "User created successfully!";
+            } else {
+                $error = "Error creating user: " . $conn->error;
+            }
         }
     }
 
@@ -46,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
 }
 
 // Get all users
-$query = "SELECT id, username, role, created_at FROM users ORDER BY created_at DESC";
+$query = "SELECT id, username, email, role, created_at FROM users ORDER BY created_at DESC";
 $users = $conn->query($query);
 require_once 'includes/header.php';
 ?>
@@ -79,6 +92,7 @@ require_once 'includes/header.php';
                         <thead>
                             <tr>
                                 <th>Username</th>
+                                <th>Email</th>
                                 <th>Role</th>
                                 <th>Created At</th>
                                 <th>Actions</th>
@@ -88,6 +102,7 @@ require_once 'includes/header.php';
                             <?php while ($user = $users->fetch_assoc()): ?>
                             <tr>
                                 <td><?php echo htmlspecialchars($user['username']); ?></td>
+                                <td><?php echo htmlspecialchars($user['email']); ?></td>
                                 <td>
                                     <span class="badge bg-<?php
                                         echo match($user['role']) {
@@ -130,13 +145,20 @@ require_once 'includes/header.php';
                     <h5 class="modal-title">Add New User</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <form method="POST">
+                <form method="POST" id="createUserForm">
                     <div class="modal-body">
                         <input type="hidden" name="action" value="create">
 
                         <div class="mb-3">
                             <label for="username" class="form-label">Username</label>
                             <input type="text" class="form-control" id="username" name="username" required>
+                            <div class="invalid-feedback"></div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" name="email" required>
+                            <div class="invalid-feedback"></div>
                         </div>
 
                         <div class="mb-3">
@@ -162,7 +184,107 @@ require_once 'includes/header.php';
             </div>
         </div>
     </div>
-
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const emailInput = document.getElementById('email');
+        const usernameInput = document.getElementById('username');
+        const createForm = document.getElementById('createUserForm');
+        const submitButton = createForm.querySelector('button[type="submit"]');
+        let emailTimeoutId, usernameTimeoutId;
+        let isSubmitting = false;
+
+        async function checkAvailability(input, endpoint) {
+            if (!input.value) return true;
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `${input.name}=${encodeURIComponent(input.value)}`
+                });
+                const data = await response.json();
+
+                input.classList.remove('is-invalid', 'is-valid');
+                const feedback = input.nextElementSibling;
+
+                if (data.exists) {
+                    input.classList.add('is-invalid');
+                    if (feedback) {
+                        feedback.textContent = `This ${input.name} is already taken`;
+                    }
+                    return false;
+                } else {
+                    input.classList.add('is-valid');
+                    if (feedback) {
+                        feedback.textContent = '';
+                    }
+                    return true;
+                }
+            } catch (error) {
+                console.error('Error checking availability:', error);
+                return false;
+            }
+        }
+
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        const debouncedEmailCheck = debounce(() => {
+            checkAvailability(emailInput, 'check_email.php').then(updateSubmitButton);
+        }, 500);
+
+        const debouncedUsernameCheck = debounce(() => {
+            checkAvailability(usernameInput, 'check_username.php').then(updateSubmitButton);
+        }, 500);
+
+        emailInput.addEventListener('input', debouncedEmailCheck);
+        usernameInput.addEventListener('input', debouncedUsernameCheck);
+
+        function updateSubmitButton() {
+            const isEmailValid = !emailInput.classList.contains('is-invalid');
+            const isUsernameValid = !usernameInput.classList.contains('is-invalid');
+            submitButton.disabled = !(isEmailValid && isUsernameValid);
+        }
+
+        createForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            if (isSubmitting) return;
+            isSubmitting = true;
+
+            const emailValid = await checkAvailability(emailInput, 'check_email.php');
+            const usernameValid = await checkAvailability(usernameInput, 'check_username.php');
+
+            if (emailValid && usernameValid) {
+                this.submit();
+            } else {
+                isSubmitting = false;
+                updateSubmitButton();
+            }
+        });
+
+        // Reset form when modal is hidden
+        const addUserModal = document.getElementById('addUserModal');
+        addUserModal.addEventListener('hidden.bs.modal', function () {
+            createForm.reset();
+            emailInput.classList.remove('is-invalid', 'is-valid');
+            usernameInput.classList.remove('is-invalid', 'is-valid');
+            submitButton.disabled = false;
+            isSubmitting = false;
+        });
+    });
+    </script>
 </body>
 </html>

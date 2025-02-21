@@ -6,6 +6,17 @@ require_once 'includes/functions.php';
 checkPermission(['admin']);
 $user_role = getUserRole();
 
+// Add these lines to handle session messages
+if (isset($_SESSION['error'])) {
+    $error = $_SESSION['error'];
+    unset($_SESSION['error']);
+}
+
+if (isset($_SESSION['success'])) {
+    $success = $_SESSION['success'];
+    unset($_SESSION['success']);
+}
+
 // Pagination settings
 $items_per_page = 10;
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
@@ -43,31 +54,47 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $project_name = $conn->real_escape_string($_POST['project_name']);
                 $webmaster_id = (int)$_POST['webmaster_id'];
 
+                // Check if project name already exists
+                $check_query = "SELECT COUNT(*) as count FROM projects WHERE name = ?";
+                $check_stmt = $conn->prepare($check_query);
+                $check_stmt->bind_param("s", $project_name);
+                $check_stmt->execute();
+                $result = $check_stmt->get_result();
+                $count = $result->fetch_assoc()['count'];
+
+                if ($count > 0) {
+                    $_SESSION['error'] = "A project with this name already exists!";
+                    header("Location: projects.php" . (isset($_GET['page']) ? "?page=" . $_GET['page'] : ""));
+                    exit();
+                }
+
                 $conn->begin_transaction();
                 try {
-                     // Insert project
-                        $query = "INSERT INTO projects (name, webmaster_id, current_status) VALUES (?, ?, 'wp_conversion')";
-                        $stmt = $conn->prepare($query);
-                        $stmt->bind_param("si", $project_name, $webmaster_id);
-                        $stmt->execute();
+                    // Insert project
+                    $query = "INSERT INTO projects (name, webmaster_id, current_status) VALUES (?, ?, 'wp_conversion')";
+                    $stmt = $conn->prepare($query);
+                    $stmt->bind_param("si", $project_name, $webmaster_id);
+                    $stmt->execute();
 
-                        $project_id = $conn->insert_id;
+                    $project_id = $conn->insert_id;
 
-                        // Insert only non-archived checklist items for new projects
-                        $query = "INSERT INTO project_checklist_status (project_id, checklist_item_id, status)
-                                SELECT ?, id, 'idle'
-                                FROM checklist_items
-                                WHERE is_archived = 0";
-                        $stmt = $conn->prepare($query);
-                        $stmt->bind_param("i", $project_id);
-                        $stmt->execute();
+                    // Insert only non-archived checklist items for new projects
+                    $query = "INSERT INTO project_checklist_status (project_id, checklist_item_id, status)
+                            SELECT ?, id, 'idle'
+                            FROM checklist_items
+                            WHERE is_archived = 0";
+                    $stmt = $conn->prepare($query);
+                    $stmt->bind_param("i", $project_id);
+                    $stmt->execute();
 
-                        $conn->commit();
-                        $success = "Project created successfully!";
+                    $conn->commit();
+                    $_SESSION['success'] = "Project created successfully!";
                 } catch (Exception $e) {
                     $conn->rollback();
-                    $error = "Error creating project: " . $e->getMessage();
+                    $_SESSION['error'] = "Error creating project: " . $e->getMessage();
                 }
+                header("Location: projects.php" . (isset($_GET['page']) ? "?page=" . $_GET['page'] : ""));
+                exit();
                 break;
 
             case 'edit':
@@ -143,6 +170,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             <div class="alert alert-success"><?php echo $success; ?></div>
         <?php endif; ?>
 
+        <div class="container mt-4">
+            <?php if (isset($_SESSION['error'])): ?>
+                <div class="alert alert-danger"><?php echo $_SESSION['error']; ?></div>
+                <?php unset($_SESSION['error']); ?>
+            <?php endif; ?>
+
+            <?php if (isset($_SESSION['success'])): ?>
+                <div class="alert alert-success"><?php echo $_SESSION['success']; ?></div>
+                <?php unset($_SESSION['success']); ?>
+            <?php endif; ?>
+
+            <!-- ...rest of your existing HTML... -->
+        </div>
+
         <div class="card mb-4">
             <div class="card-header">
                 <h4>Add New Project</h4>
@@ -154,6 +195,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         <div class="col-md-6 mb-3">
                             <label for="project_name" class="form-label">Project Name</label>
                             <input type="text" class="form-control" id="project_name" name="project_name" required>
+                            <!-- Feedback will be inserted here by JavaScript -->
                         </div>
 
                         <div class="col-md-6 mb-3">
@@ -305,6 +347,53 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         new bootstrap.Modal(document.getElementById('editProjectModal')).show();
     }
+
+    // Add this inside the <script> tags in projects.php
+    document.addEventListener('DOMContentLoaded', function() {
+        const projectNameInput = document.getElementById('project_name');
+        const createProjectButton = document.querySelector('button[type="submit"]');
+        let timeoutId;
+
+        projectNameInput.addEventListener('input', function() {
+            clearTimeout(timeoutId);
+            const projectName = this.value;
+
+            // Remove any existing feedback
+            this.classList.remove('is-invalid', 'is-valid');
+            const existingFeedback = this.nextElementSibling;
+            if (existingFeedback && existingFeedback.classList.contains('invalid-feedback')) {
+                existingFeedback.remove();
+            }
+
+            if (projectName.length > 0) {
+                timeoutId = setTimeout(() => {
+                    fetch('check_project_name.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: 'project_name=' + encodeURIComponent(projectName)
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.exists) {
+                            projectNameInput.classList.add('is-invalid');
+                            createProjectButton.disabled = true;
+
+                            // Add invalid feedback
+                            const feedback = document.createElement('div');
+                            feedback.classList.add('invalid-feedback');
+                            feedback.textContent = 'This project name already exists!';
+                            projectNameInput.parentNode.appendChild(feedback);
+                        } else {
+                            projectNameInput.classList.add('is-valid');
+                            createProjectButton.disabled = false;
+                        }
+                    });
+                }, 500); // Delay of 500ms to prevent too many requests
+            }
+        });
+    });
     </script>
 </body>
 </html>

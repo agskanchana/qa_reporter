@@ -170,6 +170,28 @@ if (in_array($user_role, ['admin', 'qa_manager'])) {
     }
 }
 
+// Add after existing queries, before require_once 'includes/header.php'
+
+// Get most failing checklist items by stage
+$failing_items_query = "SELECT
+    ci.title,
+    ci.stage,
+    COUNT(pcs.id) as fail_count
+FROM checklist_items ci
+JOIN project_checklist_status pcs ON ci.id = pcs.checklist_item_id
+WHERE pcs.status = 'failed'
+    AND ci.is_archived = 0
+    AND pcs.is_archived = 0
+GROUP BY ci.id, ci.title, ci.stage
+HAVING COUNT(pcs.id) > 0
+ORDER BY ci.stage, fail_count DESC";
+
+$failing_items_result = $conn->query($failing_items_query);
+$failing_items = [];
+while ($row = $failing_items_result->fetch_assoc()) {
+    $failing_items[$row['stage']][] = $row;
+}
+
 require_once 'includes/header.php';
 ?>
 
@@ -186,6 +208,62 @@ require_once 'includes/header.php';
                 <div class="row">
 
         <div class="col-md-3">
+        <?php if($user_role === 'webmaster'):?>
+            <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Most Failing Items</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="accordion" id="failingItemsAccordion">
+                            <?php
+                            $stages = ['wp_conversion' => 'WP Conversion',
+                                      'page_creation' => 'Page Creation',
+                                      'golive' => 'Golive'];
+
+                            foreach ($stages as $stage_key => $stage_name):
+                                $items = $failing_items[$stage_key] ?? [];
+                            ?>
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed" type="button"
+                                                data-bs-toggle="collapse"
+                                                data-bs-target="#failing<?php echo $stage_key; ?>">
+                                            <?php echo $stage_name; ?>
+                                            <?php if (!empty($items)): ?>
+                                                <span class="badge bg-danger ms-2">
+                                                    <?php echo count($items); ?>
+                                                </span>
+                                            <?php endif; ?>
+                                        </button>
+                                    </h2>
+                                    <div id="failing<?php echo $stage_key; ?>"
+                                         class="accordion-collapse collapse"
+                                         data-bs-parent="#failingItemsAccordion">
+                                        <div class="accordion-body p-2">
+                                            <?php if (empty($items)): ?>
+                                                <p class="text-muted mb-0">No failing items</p>
+                                            <?php else: ?>
+                                                <?php foreach ($items as $item): ?>
+                                                    <div class="card mb-2">
+                                                        <div class="card-body p-2">
+                                                            <div class="d-flex justify-content-between align-items-center">
+                                                                <small><?php echo htmlspecialchars($item['title']); ?></small>
+                                                                <span class="badge bg-danger">
+                                                                    <?php echo $item['fail_count']; ?>
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                </div>
+        <?php endif;?>
         <?php if ($user_role === 'admin'): ?>
         <div class="card mb-4">
                 <div class="card-header ">
@@ -412,6 +490,10 @@ require_once 'includes/header.php';
                         </div>
                     </div>
                 </div>
+
+
+
+
                     </div>
                 </div>
             </main>

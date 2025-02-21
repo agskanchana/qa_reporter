@@ -72,51 +72,84 @@ function removeChecklistItemFromProjects($item_id) {
     }
 }
 
+// Add or update the getDetailedWebmasterProjects function
+
 function getDetailedWebmasterProjects($conn, $start_date, $end_date) {
+    // Modify end_date to include the entire day
+    $end_date = date('Y-m-d 23:59:59', strtotime($end_date));
+
     $query = "SELECT
-                u.id as webmaster_id,
-                u.username as webmaster_name,
-                p.id as project_id,
-                p.name as project_name,
-                p.created_at,
-                p.current_status,
-                (SELECT COUNT(*)
-                 FROM project_checklist_status pcs
-                 JOIN checklist_items ci ON pcs.checklist_item_id = ci.id
-                 WHERE pcs.project_id = p.id AND ci.stage = 'wp_conversion'
-                 AND pcs.status IN ('passed', 'fixed')) as wp_items_completed,
-                (SELECT COUNT(*)
-                 FROM checklist_items
-                 WHERE stage = 'wp_conversion') as total_wp_items,
-                (SELECT COUNT(*)
-                 FROM project_checklist_status pcs
-                 JOIN checklist_items ci ON pcs.checklist_item_id = ci.id
-                 WHERE pcs.project_id = p.id AND ci.stage = 'page_creation'
-                 AND pcs.status IN ('passed', 'fixed')) as page_items_completed,
-                (SELECT COUNT(*)
-                 FROM checklist_items
-                 WHERE stage = 'page_creation') as total_page_items,
-                (SELECT COUNT(*)
-                 FROM project_checklist_status pcs
-                 JOIN checklist_items ci ON pcs.checklist_item_id = ci.id
-                 WHERE pcs.project_id = p.id AND ci.stage = 'golive'
-                 AND pcs.status IN ('passed', 'fixed')) as golive_items_completed,
-                (SELECT COUNT(*)
-                 FROM checklist_items
-                 WHERE stage = 'golive') as total_golive_items
-              FROM users u
-              LEFT JOIN projects p ON u.id = p.webmaster_id
-                   AND p.created_at BETWEEN ? AND ?
-              WHERE u.role = 'webmaster'
-              ORDER BY u.username, p.created_at DESC";
+        u.id as webmaster_id,
+        u.username as webmaster_name,
+        p.id as project_id,
+        p.name as project_name,
+        p.current_status,
+        p.created_at,
+
+        (SELECT COUNT(*)
+         FROM project_checklist_status pcs
+         JOIN checklist_items ci ON pcs.checklist_item_id = ci.id
+         WHERE pcs.project_id = p.id
+         AND ci.stage = 'wp_conversion'
+         AND ci.is_archived = 0
+         AND pcs.is_archived = 0) as total_wp_items,
+
+        (SELECT COUNT(*)
+         FROM project_checklist_status pcs
+         JOIN checklist_items ci ON pcs.checklist_item_id = ci.id
+         WHERE pcs.project_id = p.id
+         AND ci.stage = 'wp_conversion'
+         AND pcs.status IN ('passed', 'fixed')
+         AND ci.is_archived = 0
+         AND pcs.is_archived = 0) as wp_items_completed,
+
+        -- Similar modifications for page_creation and golive items
+        (SELECT COUNT(*)
+         FROM project_checklist_status pcs
+         JOIN checklist_items ci ON pcs.checklist_item_id = ci.id
+         WHERE pcs.project_id = p.id
+         AND ci.stage = 'page_creation'
+         AND ci.is_archived = 0
+         AND pcs.is_archived = 0) as total_page_items,
+
+        (SELECT COUNT(*)
+         FROM project_checklist_status pcs
+         JOIN checklist_items ci ON pcs.checklist_item_id = ci.id
+         WHERE pcs.project_id = p.id
+         AND ci.stage = 'page_creation'
+         AND pcs.status IN ('passed', 'fixed')
+         AND ci.is_archived = 0
+         AND pcs.is_archived = 0) as page_items_completed,
+
+        (SELECT COUNT(*)
+         FROM project_checklist_status pcs
+         JOIN checklist_items ci ON pcs.checklist_item_id = ci.id
+         WHERE pcs.project_id = p.id
+         AND ci.stage = 'golive'
+         AND ci.is_archived = 0
+         AND pcs.is_archived = 0) as total_golive_items,
+
+        (SELECT COUNT(*)
+         FROM project_checklist_status pcs
+         JOIN checklist_items ci ON pcs.checklist_item_id = ci.id
+         WHERE pcs.project_id = p.id
+         AND ci.stage = 'golive'
+         AND pcs.status IN ('passed', 'fixed')
+         AND ci.is_archived = 0
+         AND pcs.is_archived = 0) as golive_items_completed
+
+    FROM users u
+    LEFT JOIN projects p ON u.id = p.webmaster_id
+        AND DATE(p.created_at) >= ?
+        AND DATE(p.created_at) <= DATE(?)
+    WHERE u.role = 'webmaster'
+    ORDER BY u.username, p.created_at DESC";
 
     $stmt = $conn->prepare($query);
     $stmt->bind_param("ss", $start_date, $end_date);
     $stmt->execute();
     return $stmt->get_result();
 }
-
-
 
 function removeChecklistItemSafely($item_id) {
     global $conn;
