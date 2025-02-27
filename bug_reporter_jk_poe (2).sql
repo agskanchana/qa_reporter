@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: Feb 19, 2025 at 12:03 PM
+-- Generation Time: Feb 27, 2025 at 11:07 AM
 -- Server version: 8.3.0
 -- PHP Version: 8.2.18
 
@@ -74,10 +74,11 @@ CREATE TABLE IF NOT EXISTS `projects` (
   `id` int NOT NULL AUTO_INCREMENT,
   `name` varchar(100) NOT NULL,
   `webmaster_id` int DEFAULT NULL,
-  `current_status` enum('wp_conversion','wp_conversion_qa','page_creation','page_creation_qa','golive','golive_qa','completed') DEFAULT 'wp_conversion',
+  `current_status` varchar(255) DEFAULT 'wp_conversion',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_project_name` (`name`),
   KEY `webmaster_id` (`webmaster_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -100,6 +101,24 @@ CREATE TABLE IF NOT EXISTS `project_checklist_status` (
   KEY `project_id` (`project_id`),
   KEY `checklist_item_id` (`checklist_item_id`),
   KEY `updated_by` (`updated_by`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `project_stage_status`
+--
+
+DROP TABLE IF EXISTS `project_stage_status`;
+CREATE TABLE IF NOT EXISTS `project_stage_status` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `project_id` int NOT NULL,
+  `stage` varchar(50) NOT NULL,
+  `status` varchar(50) NOT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_project_stage` (`project_id`,`stage`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
@@ -131,11 +150,13 @@ DROP TABLE IF EXISTS `users`;
 CREATE TABLE IF NOT EXISTS `users` (
   `id` int NOT NULL AUTO_INCREMENT,
   `username` varchar(50) NOT NULL,
+  `email` varchar(255) NOT NULL,
   `password` varchar(255) NOT NULL,
   `role` enum('admin','qa_manager','qa_reporter','webmaster') NOT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `username` (`username`)
+  UNIQUE KEY `username` (`username`),
+  UNIQUE KEY `unique_email` (`email`(191))
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 COMMIT;
 

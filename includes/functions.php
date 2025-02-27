@@ -2,6 +2,15 @@
 function syncProjectChecklist($project_id = null) {
     global $conn;
 
+    if ($project_id) {
+        // Ensure project has initial status
+        $status_query = "UPDATE projects SET current_status = 'wp_conversion'
+                        WHERE id = ? AND (current_status IS NULL OR current_status = '')";
+        $stmt = $conn->prepare($status_query);
+        $stmt->bind_param("i", $project_id);
+        $stmt->execute();
+    }
+
     $projects_query = $project_id ?
         "SELECT id, created_at FROM projects WHERE id = ?" :
         "SELECT id, created_at FROM projects";

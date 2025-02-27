@@ -54,19 +54,13 @@ $projects = [];
 $unassigned_projects = [];
 
 if ($user_role === 'qa_reporter') {
-    // Get only assigned projects with page_creation_qa status for this QA reporter
-    $query = "SELECT p.*,
-              u.username as webmaster_name,
-              qa.id as assignment_id,
-              COALESCE(qa_user.username, 'None') as assigned_qa_username
+    // Get only assigned projects for QA reporter
+    $query = "SELECT p.*, u.username as webmaster_name, qa.id as assignment_id
               FROM projects p
               LEFT JOIN users u ON p.webmaster_id = u.id
               INNER JOIN qa_assignments qa ON p.id = qa.project_id
-              LEFT JOIN users qa_user ON qa.qa_user_id = qa_user.id
               WHERE qa.qa_user_id = ?
-              AND p.current_status LIKE '%page_creation_qa%'
               ORDER BY p.created_at DESC";
-
     $stmt = $conn->prepare($query);
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
@@ -275,25 +269,6 @@ $failing_items_result = $conn->query($failing_items_query);
 $failing_items = [];
 while ($row = $failing_items_result->fetch_assoc()) {
     $failing_items[$row['stage']][] = $row;
-}
-
-// Add this query where the other queries are (before the require_once 'includes/header.php')
-
-if (in_array($user_role, ['admin', 'qa_manager'])) {
-    // Get webmaster projects that are in basic stages (not QA or completed)
-    $webmaster_active_query = "SELECT p.*,
-        u.username as webmaster_name,
-        qa.id as assignment_id,
-        IFNULL(qa_user.username, 'Unassigned') as assigned_qa_username
-    FROM projects p
-    LEFT JOIN users u ON p.webmaster_id = u.id
-    LEFT JOIN qa_assignments qa ON p.id = qa.project_id
-    LEFT JOIN users qa_user ON qa.qa_user_id = qa_user.id
-    WHERE p.current_status IN ('wp_conversion', 'page_creation', 'golive')
-    ORDER BY p.created_at DESC";
-
-    $result = $conn->query($webmaster_active_query);
-    $webmaster_active_projects = $result->fetch_all(MYSQLI_ASSOC);
 }
 
 require_once 'includes/header.php';
@@ -556,7 +531,60 @@ require_once 'includes/header.php';
 <?php endif; ?>
 
 
-
+                <?php if (in_array($user_role, ['admin', 'qa_manager']) && !empty($unassigned_projects)): ?>
+                    <div class="card mb-4">
+                        <div class="card-header ">
+                            <h4>Unassigned Projects</h4>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Project Name</th>
+                                            <th>Status</th>
+                                            <th>Webmaster</th>
+                                            <th>Created At</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($unassigned_projects as $project): ?>
+                                            <tr>
+                                                <td><?php echo htmlspecialchars($project['name']); ?></td>
+                                                <td>
+                                                    <span class="badge bg-primary">
+                                                        <?php echo ucfirst(str_replace('_', ' ', $project['current_status'])); ?>
+                                                    </span>
+                                                </td>
+                                                <td><?php echo htmlspecialchars($project['webmaster_name']); ?></td>
+                                                <td><?php echo date('Y-m-d H:i:s', strtotime($project['created_at'])); ?></td>
+                                                <td>
+                                                    <form method="POST" class="d-inline">
+                                                        <input type="hidden" name="project_id" value="<?php echo $project['id']; ?>">
+                                                        <select name="qa_user_id" class="form-select form-select-sm d-inline-block w-auto" required>
+                                                            <option value="">Assign QA</option>
+                                                            <?php foreach ($qa_reporters as $qa): ?>
+                                                                <option value="<?php echo $qa['id']; ?>">
+                                                                    <?php echo htmlspecialchars($qa['username']); ?>
+                                                                </option>
+                                                            <?php endforeach; ?>
+                                                        </select>
+                                                        <button type="submit" name="assign_qa" class="btn btn-primary btn-sm">
+                                                            Assign
+                                                        </button>
+                                                    </form>
+                                                    <a href="view_project.php?id=<?php echo $project['id']; ?>"
+                                                       class="btn btn-info btn-sm">View</a>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                <?php endif; ?>
 
                 <?php if (in_array($user_role, ['admin', 'qa_manager'])): ?>
     <!-- WP Conversion QA Projects -->
@@ -664,26 +692,7 @@ require_once 'includes/header.php';
                                         <?php endforeach; ?>
                                     </td>
                                     <td><?php echo htmlspecialchars($project['webmaster_name'] ?? 'Deleted User'); ?></td>
-                                    <td>
-                                        <?php if ($project['assigned_qa_username'] === 'Unassigned'): ?>
-                                            <form method="POST" class="d-inline">
-                                                <input type="hidden" name="project_id" value="<?php echo $project['id']; ?>">
-                                                <select name="qa_user_id" class="form-select form-select-sm d-inline-block w-auto" required>
-                                                    <option value="">Assign QA</option>
-                                                    <?php foreach ($qa_reporters as $qa): ?>
-                                                        <option value="<?php echo $qa['id']; ?>">
-                                                            <?php echo htmlspecialchars($qa['username']); ?>
-                                                        </option>
-                                                    <?php endforeach; ?>
-                                                </select>
-                                                <button type="submit" name="assign_qa" class="btn btn-primary btn-sm">
-                                                    Assign
-                                                </button>
-                                            </form>
-                                        <?php else: ?>
-                                            <?php echo htmlspecialchars($project['assigned_qa_username']); ?>
-                                        <?php endif; ?>
-                                    </td>
+                                    <td><?php echo htmlspecialchars($project['assigned_qa_username']); ?></td>
                                     <td><?php echo date('Y-m-d H:i:s', strtotime($project['created_at'])); ?></td>
                                     <td>
                                         <a href="view_project.php?id=<?php echo $project['id']; ?>"
@@ -761,58 +770,6 @@ require_once 'includes/header.php';
         </div>
     </div>
 
-     <!-- Projects with webmasters  -->
-     <div class="card mb-4">
-        <div class="card-header">
-            <h4>Webmaster Projects
-                <span class="badge bg-primary"><?php echo count($webmaster_active_projects); ?></span>
-            </h4>
-        </div>
-        <div class="card-body">
-            <?php if (!empty($webmaster_active_projects)): ?>
-                <div class="table-responsive">
-                    <table class="table table-striped">
-                        <thead>
-                            <tr>
-                                <th>Project Name</th>
-                                <th>Status</th>
-                                <th>Webmaster</th>
-                                <th>Created At</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($webmaster_active_projects as $project): ?>
-                                <tr>
-                                    <td><?php echo htmlspecialchars($project['name']); ?></td>
-                                    <td>
-                                        <span class="badge bg-<?php
-                                            echo match($project['current_status']) {
-                                                'wp_conversion' => 'info',
-                                                'page_creation' => 'warning',
-                                                'golive' => 'primary',
-                                                default => 'secondary'
-                                            };
-                                        ?>">
-                                            <?php echo ucwords(str_replace('_', ' ', $project['current_status'])); ?>
-                                        </span>
-                                    </td>
-                                    <td><?php echo htmlspecialchars($project['webmaster_name']); ?></td>
-                                    <td><?php echo date('Y-m-d H:i:s', strtotime($project['created_at'])); ?></td>
-                                    <td>
-                                        <a href="view_project.php?id=<?php echo $project['id']; ?>"
-                                           class="btn btn-info btn-sm">View</a>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            <?php else: ?>
-                <p class="text-muted">No active webmaster projects</p>
-            <?php endif; ?>
-        </div>
-    </div>
     <!-- Completed Projects with Pagination -->
     <div class="card">
         <div class="card-header">
@@ -894,66 +851,6 @@ require_once 'includes/header.php';
     </div>
 <?php endif; ?>
 
-
-<?php if ($user_role === 'qa_reporter'): ?>
-    <div class="card mb-4">
-        <div class="card-header">
-            <h4>My Assigned Projects (Page Creation QA)
-                <span class="badge bg-primary"><?php echo count($projects); ?></span>
-            </h4>
-        </div>
-        <div class="card-body">
-            <?php if (!empty($projects)): ?>
-                <div class="table-responsive">
-                    <table class="table table-striped">
-                        <thead>
-                            <tr>
-                                <th>Project Name</th>
-                                <th>Status</th>
-                                <th>Webmaster</th>
-                                <th>Created At</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($projects as $project): ?>
-                                <tr>
-                                    <td><?php echo htmlspecialchars($project['name']); ?></td>
-                                    <td>
-                                        <?php
-                                        $statuses = !empty($project['current_status']) ?
-                                            explode(',', $project['current_status']) :
-                                            [];
-                                        foreach ($statuses as $status):
-                                            $status_class = match(true) {
-                                                str_contains($status, 'wp_conversion') => 'info',
-                                                str_contains($status, 'page_creation') => 'warning',
-                                                str_contains($status, 'golive') => 'primary',
-                                                default => 'secondary'
-                                            };
-                                        ?>
-                                            <span class="badge bg-<?php echo $status_class; ?> me-1">
-                                                <?php echo ucwords(str_replace('_', ' ', $status)); ?>
-                                            </span>
-                                        <?php endforeach; ?>
-                                    </td>
-                                    <td><?php echo htmlspecialchars($project['webmaster_name'] ?? 'Deleted User'); ?></td>
-                                    <td><?php echo date('Y-m-d H:i:s', strtotime($project['created_at'])); ?></td>
-                                    <td>
-                                        <a href="view_project.php?id=<?php echo $project['id']; ?>"
-                                           class="btn btn-info btn-sm">View</a>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            <?php else: ?>
-                <p class="text-muted">No projects assigned for Page Creation QA</p>
-            <?php endif; ?>
-        </div>
-    </div>
-<?php endif; ?>
 
 
                     </div>

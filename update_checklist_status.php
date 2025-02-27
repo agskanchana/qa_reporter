@@ -72,129 +72,158 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         $new_project_status = null;
 
-        // Complex status progression logic
-        if ($user_role === 'webmaster') {
-            // If webmaster marks all items as fixed
-            if ($status_counts['total'] == $status_counts['fixed_count']) {
-                // Move to QA stage
-                switch ($current_stage) {
-                    case 'wp_conversion':
-                        $new_project_status = 'wp_conversion_qa';
-                        break;
-                    case 'page_creation':
-                        $new_project_status = 'page_creation_qa';
-                        break;
-                    case 'golive':
-                        $new_project_status = 'golive_qa';
-                        break;
-                }
-            }
-            // If webmaster fixes an item and all other items are either passed or fixed
-            else if ($status_counts['total'] == $status_counts['resolved_count']) {
-                // Move back to QA stage
-                switch ($current_stage) {
-                    case 'wp_conversion':
-                        $new_project_status = 'wp_conversion_qa';
-                        break;
-                    case 'page_creation':
-                        $new_project_status = 'page_creation_qa';
-                        break;
-                    case 'golive':
-                        $new_project_status = 'golive_qa';
-                        break;
-                }
-            }
+        // Get status of all checklist items across all stages
+        $all_stages_query = "SELECT
+            ci.stage,
+            COUNT(*) as total,
+            SUM(CASE WHEN pcs.status = 'passed' THEN 1 ELSE 0 END) as passed_count,
+            SUM(CASE WHEN pcs.status = 'fixed' THEN 1 ELSE 0 END) as fixed_count,
+            SUM(CASE WHEN pcs.status = 'failed' THEN 1 ELSE 0 END) as failed_count,
+            SUM(CASE WHEN pcs.status = 'idle' THEN 1 ELSE 0 END) as idle_count
+        FROM project_checklist_status pcs
+        JOIN checklist_items ci ON pcs.checklist_item_id = ci.id
+        WHERE pcs.project_id = ?
+        GROUP BY ci.stage";
+
+        $stmt = $conn->prepare($all_stages_query);
+        $stmt->bind_param("i", $project_id);
+        $stmt->execute();
+        $all_stages_result = $stmt->get_result();
+
+        $stages_status = [];
+        while ($row = $all_stages_result->fetch_assoc()) {
+            $stages_status[$row['stage']] = $row;
         }
-        else if (in_array($user_role, ['qa_reporter', 'qa_manager', 'admin'])) {
-            // Check if all items in the stage have been reviewed (either passed or failed)
+
+        if ($user_role === 'webmaster') {
+            // Get current project status
+            $current_statuses = !empty($current_project_status) ?
+                array_filter(explode(',', $current_project_status)) :
+                ['wp_conversion'];
+
+            // Get completion status for all stages
+            $stages_query = "SELECT
+                ci.stage,
+                COUNT(*) as total,
+                SUM(CASE WHEN pcs.status = 'fixed' THEN 1 ELSE 0 END) as fixed_count,
+                SUM(CASE WHEN pcs.status = 'passed' THEN 1 ELSE 0 END) as passed_count
+            FROM project_checklist_status pcs
+            JOIN checklist_items ci ON pcs.checklist_item_id = ci.id
+            WHERE pcs.project_id = ? AND ci.is_archived = 0
+            GROUP BY ci.stage";
+
+            $stmt = $conn->prepare($stages_query);
+            $stmt->bind_param("i", $project_id);
+            $stmt->execute();
+            $stages_result = $stmt->get_result();
+
+            $new_statuses = $current_statuses;
+
+            // Process each stage
+            while ($stage_row = $stages_result->fetch_assoc()) {
+                $stage = $stage_row['stage'];
+                $qa_status = $stage . '_qa';
+
+                if ($stage === $current_stage) {
+                    // Check if all items are either fixed or passed
+                    if ($stage_row['fixed_count'] + $stage_row['passed_count'] == $stage_row['total'] &&
+                        $stage_row['fixed_count'] > 0) {
+                        // If there's at least one fixed item and all others are passed/fixed
+                        // Remove non-QA status
+                        $new_statuses = array_filter($new_statuses, function($status) use ($stage) {
+                            return $status !== $stage;
+                        });
+
+                        // Add QA status if not present
+                        if (!in_array($qa_status, $new_statuses)) {
+                            $new_statuses[] = $qa_status;
+                        }
+                    }
+                }
+            }
+
+            // Ensure we have at least wp_conversion status
+            if (empty($new_statuses)) {
+                $new_statuses[] = 'wp_conversion';
+            }
+
+            // Update project status
+            sort($new_statuses);
+            $new_project_status = implode(',', array_unique($new_statuses));
+
+            $update_project = "UPDATE projects SET current_status = ? WHERE id = ?";
+            $stmt = $conn->prepare($update_project);
+            $stmt->bind_param("si", $new_project_status, $project_id);
+            $stmt->execute();
+        } else if (in_array($user_role, ['qa_reporter', 'qa_manager', 'admin'])) {
             $all_items_reviewed = ($status_counts['passed_count'] + $status_counts['failed_count']) == $status_counts['total'];
 
             if ($all_items_reviewed) {
+                $current_statuses = !empty($current_project_status) ? explode(',', $current_project_status) : [];
+
                 if ($status_counts['failed_count'] > 0) {
-                    // If any items are failed and all items have been reviewed, revert to previous stage
-                    switch ($current_stage) {
-                        case 'wp_conversion':
-                            $new_project_status = 'wp_conversion';
-                            break;
-                        case 'page_creation':
-                            $new_project_status = 'page_creation';
-                            break;
-                        case 'golive':
-                            $new_project_status = 'golive';
-                            break;
+                    // Remove QA status for current stage if any items failed
+                    $qa_status = $current_stage . '_qa';
+                    $current_statuses = array_filter($current_statuses, function($status) use ($qa_status) {
+                        return $status !== $qa_status;
+                    });
+
+                    // Set status back to non-QA stage
+                    if (!in_array($current_stage, $current_statuses)) {
+                        $current_statuses[] = $current_stage;
+                    }
+                } else if ($status_counts['passed_count'] == $status_counts['total']) {
+                    // All items passed, progress to next stage
+                    if ($current_stage === 'wp_conversion') {
+                        // Remove wp_conversion statuses
+                        $current_statuses = array_filter($current_statuses, function($status) {
+                            return $status !== 'wp_conversion' && $status !== 'wp_conversion_qa';
+                        });
+
+                        // Add page_creation if not in page_creation_qa
+                        if (!in_array('page_creation_qa', $current_statuses)) {
+                            $current_statuses[] = 'page_creation';
+                        }
+                    } else if ($current_stage === 'page_creation') {
+                        // Remove page_creation statuses
+                        $current_statuses = array_filter($current_statuses, function($status) {
+                            return $status !== 'page_creation' && $status !== 'page_creation_qa';
+                        });
+
+                        // Add golive if not in golive_qa
+                        if (!in_array('golive_qa', $current_statuses)) {
+                            $current_statuses[] = 'golive';
+                        }
+                    } else if ($current_stage === 'golive') {
+                        // Check if all items in all stages are either passed or fixed
+                        $all_stages_complete = true;
+                        $stages_query = "SELECT
+                            COUNT(*) as total,
+                            SUM(CASE WHEN pcs.status = 'passed' THEN 1 ELSE 0 END) as passed_count,
+                            SUM(CASE WHEN pcs.status IN ('idle', 'failed') THEN 1 ELSE 0 END) as pending_count
+                        FROM project_checklist_status pcs
+                        JOIN checklist_items ci ON pcs.checklist_item_id = ci.id
+                        WHERE pcs.project_id = ? AND ci.is_archived = 0";
+
+                        $stmt = $conn->prepare($stages_query);
+                        $stmt->bind_param("i", $project_id);
+                        $stmt->execute();
+                        $all_stages = $stmt->get_result()->fetch_assoc();
+
+                        if ($all_stages['pending_count'] == 0 && $all_stages['passed_count'] == $all_stages['total']) {
+                            // All items in all stages are passed
+                            $current_statuses = ['completed'];
+                        }
                     }
                 }
-                else if ($status_counts['total'] == $status_counts['passed_count']) {
-                    // If all items are passed, move to next stage
-                    switch ($current_stage) {
-                        case 'wp_conversion':
-                            $new_project_status = 'page_creation';
-                            break;
-                        case 'page_creation':
-                            $new_project_status = 'golive';
-                            break;
-                        case 'golive':
-                            $new_project_status = 'completed';
-                            break;
-                    }
-                }
-            }
-            // If not all items have been reviewed yet, maintain current status
-            else {
-                $new_project_status = $current_project_status;
-            }
-        }
 
-        // Update project status if it has changed
-        if ($new_project_status !== null && $new_project_status !== $current_project_status) {
-            $query = "UPDATE projects
-                     SET current_status = ?, updated_at = NOW()
-                     WHERE id = ?";
-            $stmt = $conn->prepare($query);
-            $stmt->bind_param("si", $new_project_status, $project_id);
-            $stmt->execute();
-
-            // Handle QA assignments based on status changes
-            if ($new_project_status === 'wp_conversion_qa') {
-                // Assign to admin user for WP conversion QA
-                $admin_id = getAdminUserId($conn);
-                if ($admin_id) {
-                    // First delete any existing assignment
-                    $delete_query = "DELETE FROM qa_assignments WHERE project_id = ?";
-                    $stmt = $conn->prepare($delete_query);
-                    $stmt->bind_param("i", $project_id);
-                    $stmt->execute();
-
-                    // Then create new assignment to admin
-                    $assign_query = "INSERT INTO qa_assignments (project_id, qa_user_id, assigned_by)
-                                   VALUES (?, ?, ?)";
-                    $stmt = $conn->prepare($assign_query);
-                    $stmt->bind_param("iii", $project_id, $admin_id, $_SESSION['user_id']);
-                    $stmt->execute();
-                }
-            }
-            elseif ($new_project_status === 'page_creation' && $current_project_status === 'wp_conversion_qa') {
-                // Clear QA assignment when moving from wp_conversion_qa to page_creation
-                $delete_query = "DELETE FROM qa_assignments WHERE project_id = ?";
-                $stmt = $conn->prepare($delete_query);
-                $stmt->bind_param("i", $project_id);
-                $stmt->execute();
-            }
-            elseif ($new_project_status === 'golive') {
-                // Assign to admin user for golive QA
-                $admin_id = getAdminUserId($conn);
-                if ($admin_id) {
-                    // First delete any existing assignment
-                    $delete_query = "DELETE FROM qa_assignments WHERE project_id = ?";
-                    $stmt = $conn->prepare($delete_query);
-                    $stmt->bind_param("i", $project_id);
-                    $stmt->execute();
-
-                    // Then create new assignment to admin
-                    $assign_query = "INSERT INTO qa_assignments (project_id, qa_user_id, assigned_by)
-                                   VALUES (?, ?, ?)";
-                    $stmt = $conn->prepare($assign_query);
-                    $stmt->bind_param("iii", $project_id, $admin_id, $_SESSION['user_id']);
+                // Update project status
+                if (!empty($current_statuses)) {
+                    sort($current_statuses);
+                    $new_project_status = implode(',', array_unique($current_statuses));
+                    $update_project = "UPDATE projects SET current_status = ? WHERE id = ?";
+                    $stmt = $conn->prepare($update_project);
+                    $stmt->bind_param("si", $new_project_status, $project_id);
                     $stmt->execute();
                 }
             }

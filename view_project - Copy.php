@@ -26,8 +26,7 @@ if ($user_role === 'qa_reporter') {
 }
 */
 // Get project details
-$query = "SELECT p.*, u.username as webmaster_name,
-          COALESCE(p.current_status, 'wp_conversion') as current_status
+$query = "SELECT p.*, u.username as webmaster_name
           FROM projects p
           LEFT JOIN users u ON p.webmaster_id = u.id
           WHERE p.id = ?";
@@ -39,18 +38,6 @@ $project = $stmt->get_result()->fetch_assoc();
 if (!$project) {
     header("Location: dashboard.php");
     exit();
-}
-
-// Add this query to get all active stage statuses
-$stages_query = "SELECT stage, status FROM project_stage_status WHERE project_id = ?";
-$stmt = $conn->prepare($stages_query);
-$stmt->bind_param("i", $project_id);
-$stmt->execute();
-$result = $stmt->get_result();
-
-$stage_statuses = [];
-while ($row = $result->fetch_assoc()) {
-    $stage_statuses[$row['stage']] = $row['status'];
 }
 
 require_once 'includes/functions.php';
@@ -88,67 +75,42 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
 
 // Function to update project status based on checklist items
 function updateProjectStatus($conn, $project_id) {
-    // Get counts for all stages
     $query = "SELECT
-        ci.stage,
-        COUNT(*) as total_items,
-        SUM(CASE WHEN pcs.status = 'fixed' THEN 1 ELSE 0 END) as fixed_count,
-        SUM(CASE WHEN pcs.status = 'passed' THEN 1 ELSE 0 END) as passed_count,
-        SUM(CASE WHEN pcs.status = 'failed' THEN 1 ELSE 0 END) as failed_count
-    FROM project_checklist_status pcs
-    JOIN checklist_items ci ON pcs.checklist_item_id = ci.id
-    WHERE pcs.project_id = ? AND ci.is_archived = 0
-    GROUP BY ci.stage";
+    current_status,
+    (SELECT COUNT(*) FROM project_checklist_status pcs
+     JOIN checklist_items ci ON pcs.checklist_item_id = ci.id
+     WHERE pcs.project_id = p.id
+     AND ci.stage = 'wp_conversion'
+     AND pcs.status = 'fixed') as wp_fixed_count,
+    (SELECT COUNT(*) FROM project_checklist_status pcs
+     JOIN checklist_items ci ON pcs.checklist_item_id = ci.id
+     WHERE pcs.project_id = p.id
+     AND ci.stage = 'wp_conversion'
+     AND pcs.status IN ('passed', 'failed')) as wp_qa_count
+  FROM projects p
+  WHERE id = ?";
 
-    $stmt = $conn->prepare($query);
-    $stmt->bind_param("i", $project_id);
-    $stmt->execute();
-    $result = $stmt->get_result();
+$stmt = $conn->prepare($query);
+$stmt->bind_param("i", $project_id);
+$stmt->execute();
+$result = $stmt->get_result()->fetch_assoc();
 
-    // Get current statuses
-    $current_query = "SELECT current_status FROM projects WHERE id = ?";
-    $stmt = $conn->prepare($current_query);
-    $stmt->bind_param("i", $project_id);
-    $stmt->execute();
-    $current_status = $stmt->get_result()->fetch_assoc()['current_status'];
+    // Update status based on conditions
+    $new_status = $result['current_status'];
 
-    $current_statuses = !empty($current_status) ? explode(',', $current_status) : [];
-    $new_statuses = [];
-
-    // Process each stage
-    while ($row = $result->fetch_assoc()) {
-        $stage = $row['stage'];
-        $qa_status = $stage . '_qa';
-
-        if ($row['total_items'] > 0 && $row['fixed_count'] == $row['total_items']) {
-            // All items fixed, add/keep QA status
-            if (!in_array($qa_status, $new_statuses)) {
-                $new_statuses[] = $qa_status;
-            }
-
-            // Update stage_status table
-            $upsert_query = "INSERT INTO project_stage_status
-                           (project_id, stage, status)
-                           VALUES (?, ?, ?)
-                           ON DUPLICATE KEY UPDATE status = VALUES(status)";
-            $stmt = $conn->prepare($upsert_query);
-            $stmt->bind_param("iss", $project_id, $stage, $qa_status);
-            $stmt->execute();
-        }
+    if ($result['current_status'] == 'wp_conversion' && $result['wp_fixed_count'] > 0) {
+        $new_status = 'wp_conversion_qa';
+    } elseif ($result['current_status'] == 'wp_conversion_qa' && $result['wp_qa_count'] > 0) {
+        $new_status = 'page_creation';
     }
 
-    // Update project status
-    if (!empty($new_statuses)) {
-        sort($new_statuses); // Sort for consistent order
-        $combined_status = implode(',', $new_statuses);
-
-        $update_query = "UPDATE projects SET current_status = ? WHERE id = ?";
-        $stmt = $conn->prepare($update_query);
-        $stmt->bind_param("si", $combined_status, $project_id);
+    // Update project status if changed
+    if ($new_status != $result['current_status']) {
+        $query = "UPDATE projects SET current_status = ? WHERE id = ?";
+        $stmt = $conn->prepare($query);
+        $stmt->bind_param("si", $new_status, $project_id);
         $stmt->execute();
     }
-
-    return !empty($new_statuses) ? implode(',', $new_statuses) : '';
 }
 
 // Get checklist items with their status
@@ -176,36 +138,18 @@ require_once 'includes/header.php'
             <div class="col">
                 <h2><?php echo htmlspecialchars($project['name']); ?></h2>
                 <p class="text-muted">
-    Status:
-    <?php
-    $statuses = !empty($project['current_status']) ? explode(',', $project['current_status']) : [];
-    if (empty($statuses)): ?>
-        <span class="badge bg-secondary me-1">No Status</span>
-    <?php else:
-        sort($statuses); // Ensure consistent order
-        foreach ($statuses as $status):
-            $status_class = match(true) {
-                str_contains($status, 'wp_conversion') => 'info',
-                str_contains($status, 'page_creation') => 'warning',
-                str_contains($status, 'golive') => 'success',
-                default => 'secondary'
-            };
-    ?>
-            <span class="badge bg-<?php echo $status_class; ?> me-1">
-                <?php echo ucwords(str_replace('_', ' ', $status)); ?>
-            </span>
-    <?php
-        endforeach;
-    endif;
-    ?>
-    Webmaster: <?php
-    if ($project['webmaster_name']) {
-        echo htmlspecialchars($project['webmaster_name']);
-    } else {
-        echo '<span class="badge bg-danger">Deleted User</span>';
-    }
-    ?>
-</p>
+                    Status: <span class="badge bg-primary project-status-badge">
+                        <?php echo ucfirst(str_replace('_', ' ', $project['current_status'])); ?>
+                    </span>
+                    Webmaster: <?php
+                    if($project['webmaster_name']){
+                    echo htmlspecialchars($project['webmaster_name']);
+                    }else{
+                        echo '<span class="badge bg-danger">
+                                                Deleted User</span>';
+                    }
+                     ?>
+                </p>
             </div>
         </div>
 
