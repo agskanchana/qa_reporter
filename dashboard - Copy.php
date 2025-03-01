@@ -400,15 +400,12 @@ require_once 'includes/header.php';
                                                         <div class="d-flex justify-content-between align-items-center">
                                                             <small><?php echo htmlspecialchars($project['name']); ?></small>
                                                             <span class="badge bg-<?php
-                                                                $status_class = 'secondary'; // Default value
-                                                                if ($project['status'] === 'wp_conversion') {
-                                                                    $status_class = 'info';
-                                                                } elseif ($project['status'] === 'page_creation') {
-                                                                    $status_class = 'warning';
-                                                                } elseif ($project['status'] === 'golive') {
-                                                                    $status_class = 'primary';
-                                                                }
-                                                                echo $status_class;
+                                                                echo match($project['status']) {
+                                                                    'wp_conversion' => 'info',
+                                                                    'page_creation' => 'warning',
+                                                                    'golive' => 'primary',
+                                                                    default => 'secondary'
+                                                                };
                                                             ?>">
                                                                 <?php echo ucfirst(str_replace('_', ' ', $project['status'])); ?>
                                                             </span>
@@ -461,15 +458,12 @@ require_once 'includes/header.php';
                                                 <div class="d-flex justify-content-between align-items-center">
                                                     <small><?php echo htmlspecialchars($project['name']); ?></small>
                                                     <span class="badge bg-<?php
-                                                        $status_class = 'secondary'; // Default value
-                                                        if ($project['status'] === 'wp_conversion') {
-                                                            $status_class = 'info';
-                                                        } elseif ($project['status'] === 'page_creation') {
-                                                            $status_class = 'warning';
-                                                        } elseif ($project['status'] === 'golive') {
-                                                            $status_class = 'primary';
-                                                        }
-                                                        echo $status_class;
+                                                        echo match($project['status']) {
+                                                            'wp_conversion' => 'info',
+                                                            'page_creation' => 'warning',
+                                                            'golive' => 'primary',
+                                                            default => 'secondary'
+                                                        };
                                                     ?>">
                                                         <?php echo ucfirst(str_replace('_', ' ', $project['status'])); ?>
                                                     </span>
@@ -519,16 +513,13 @@ require_once 'includes/header.php';
                                             explode(',', $project['current_status']) :
                                             ['wp_conversion'];
                                         foreach ($statuses as $status):
-                                            $status_class = 'secondary'; // Default value
-                                            if (strpos($status, 'wp_conversion') !== false) {
-                                                $status_class = 'info';
-                                            } elseif (strpos($status, 'page_creation') !== false) {
-                                                $status_class = 'warning';
-                                            } elseif (strpos($status, 'golive') !== false) {
-                                                $status_class = 'primary';
-                                            } elseif ($status === 'completed') {
-                                                $status_class = 'success';
-                                            }
+                                            $status_class = match(true) {
+                                                str_contains($status, 'wp_conversion') => 'info',
+                                                str_contains($status, 'page_creation') => 'warning',
+                                                str_contains($status, 'golive') => 'primary',
+                                                $status === 'completed' => 'success',
+                                                default => 'secondary'
+                                            };
                                         ?>
                                             <span class="badge bg-<?php echo $status_class; ?> me-1">
                                                 <?php echo ucwords(str_replace('_', ' ', $status)); ?>
@@ -599,16 +590,12 @@ require_once 'includes/header.php';
                                             explode(',', $project['current_status']) :
                                             [];
                                         foreach ($statuses as $status):
-                                            $status_class = 'secondary'; // Default value
-                                            if (strpos($status, 'wp_conversion') !== false) {
-                                                $status_class = 'info';
-                                            } elseif (strpos($status, 'page_creation') !== false) {
-                                                $status_class = 'warning';
-                                            } elseif (strpos($status, 'golive') !== false) {
-                                                $status_class = 'primary';
-                                            } elseif ($status === 'completed') {
-                                                $status_class = 'success';
-                                            }
+                                            $status_class = match(true) {
+                                                str_contains($status, 'wp_conversion') => 'info',
+                                                str_contains($status, 'page_creation') => 'warning',
+                                                str_contains($status, 'golive') => 'primary',
+                                                default => 'secondary'
+                                            };
                                         ?>
                                             <span class="badge bg-<?php echo $status_class; ?> me-1">
                                                 <?php echo ucwords(str_replace('_', ' ', $status)); ?>
@@ -664,16 +651,12 @@ require_once 'includes/header.php';
                                             explode(',', $project['current_status']) :
                                             [];
                                         foreach ($statuses as $status):
-                                            $status_class = 'secondary'; // Default value
-                                            if (strpos($status, 'wp_conversion') !== false) {
-                                                $status_class = 'info';
-                                            } elseif (strpos($status, 'page_creation') !== false) {
-                                                $status_class = 'warning';
-                                            } elseif (strpos($status, 'golive') !== false) {
-                                                $status_class = 'primary';
-                                            } elseif ($status === 'completed') {
-                                                $status_class = 'success';
-                                            }
+                                            $status_class = match(true) {
+                                                str_contains($status, 'wp_conversion') => 'info',
+                                                str_contains($status, 'page_creation') => 'warning',
+                                                str_contains($status, 'golive') => 'primary',
+                                                default => 'secondary'
+                                            };
                                         ?>
                                             <span class="badge bg-<?php echo $status_class; ?> me-1">
                                                 <?php echo ucwords(str_replace('_', ' ', $status)); ?>
@@ -748,16 +731,12 @@ require_once 'includes/header.php';
                                             explode(',', $project['current_status']) :
                                             [];
                                         foreach ($statuses as $status):
-                                            $status_class = 'secondary'; // Default value
-                                            if (strpos($status, 'wp_conversion') !== false) {
-                                                $status_class = 'info';
-                                            } elseif (strpos($status, 'page_creation') !== false) {
-                                                $status_class = 'warning';
-                                            } elseif (strpos($status, 'golive') !== false) {
-                                                $status_class = 'primary';
-                                            } elseif ($status === 'completed') {
-                                                $status_class = 'success';
-                                            }
+                                            $status_class = match(true) {
+                                                str_contains($status, 'wp_conversion') => 'info',
+                                                str_contains($status, 'page_creation') => 'warning',
+                                                str_contains($status, 'golive') => 'primary',
+                                                default => 'secondary'
+                                            };
                                         ?>
                                             <span class="badge bg-<?php echo $status_class; ?> me-1">
                                                 <?php echo ucwords(str_replace('_', ' ', $status)); ?>
@@ -808,18 +787,14 @@ require_once 'includes/header.php';
                                     <td><?php echo htmlspecialchars($project['name']); ?></td>
                                     <td>
                                         <span class="badge bg-<?php
-                                            $status_class = 'secondary'; // Default value
-                                            $status = $project['current_status'] ?? '';
-                                            if ($status === 'wp_conversion') {
-                                                $status_class = 'info';
-                                            } elseif ($status === 'page_creation') {
-                                                $status_class = 'warning';
-                                            } elseif ($status === 'golive') {
-                                                $status_class = 'primary';
-                                            }
-                                            echo $status_class;
+                                            echo match($project['current_status']) {
+                                                'wp_conversion' => 'info',
+                                                'page_creation' => 'warning',
+                                                'golive' => 'primary',
+                                                default => 'secondary'
+                                            };
                                         ?>">
-                                            <?php echo ucwords(str_replace('_', ' ', $project['current_status'] ?? 'Unknown')); ?>
+                                            <?php echo ucwords(str_replace('_', ' ', $project['current_status'])); ?>
                                         </span>
                                     </td>
                                     <td><?php echo htmlspecialchars($project['webmaster_name']); ?></td>
@@ -877,16 +852,12 @@ require_once 'includes/header.php';
                                             explode(',', $project['current_status']) :
                                             [];
                                         foreach ($statuses as $status):
-                                            $status_class = 'secondary'; // Default value
-                                            if (strpos($status, 'wp_conversion') !== false) {
-                                                $status_class = 'info';
-                                            } elseif (strpos($status, 'page_creation') !== false) {
-                                                $status_class = 'warning';
-                                            } elseif (strpos($status, 'golive') !== false) {
-                                                $status_class = 'primary';
-                                            } elseif ($status === 'completed') {
-                                                $status_class = 'success';
-                                            }
+                                            $status_class = match(true) {
+                                                str_contains($status, 'wp_conversion') => 'info',
+                                                str_contains($status, 'page_creation') => 'warning',
+                                                str_contains($status, 'golive') => 'primary',
+                                                default => 'secondary'
+                                            };
                                         ?>
                                             <span class="badge bg-<?php echo $status_class; ?> me-1">
                                                 <?php echo ucwords(str_replace('_', ' ', $status)); ?>
@@ -954,16 +925,12 @@ require_once 'includes/header.php';
                                             explode(',', $project['current_status']) :
                                             [];
                                         foreach ($statuses as $status):
-                                            $status_class = 'secondary'; // Default value
-                                            if (strpos($status, 'wp_conversion') !== false) {
-                                                $status_class = 'info';
-                                            } elseif (strpos($status, 'page_creation') !== false) {
-                                                $status_class = 'warning';
-                                            } elseif (strpos($status, 'golive') !== false) {
-                                                $status_class = 'primary';
-                                            } elseif ($status === 'completed') {
-                                                $status_class = 'success';
-                                            }
+                                            $status_class = match(true) {
+                                                str_contains($status, 'wp_conversion') => 'info',
+                                                str_contains($status, 'page_creation') => 'warning',
+                                                str_contains($status, 'golive') => 'primary',
+                                                default => 'secondary'
+                                            };
                                         ?>
                                             <span class="badge bg-<?php echo $status_class; ?> me-1">
                                                 <?php echo ucwords(str_replace('_', ' ', $status)); ?>

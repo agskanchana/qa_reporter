@@ -2,6 +2,8 @@
 require_once '../includes/config.php';
 require_once '../includes/functions.php';
 
+$user_role = getUserRole();
+$user_id = $_SESSION['user_id'];
 // Check if user is admin
 checkPermission(['admin']);
 
@@ -338,4 +340,3 @@ include_once '../includes/header.php';
     </div>
 </div>
 
-<?php include_once '../includes/footer.php'; ?>

@@ -105,13 +105,17 @@ require_once 'includes/header.php';
                                 <td><?php echo htmlspecialchars($user['email']); ?></td>
                                 <td>
                                     <span class="badge bg-<?php
-                                        echo match($user['role']) {
-                                            'admin' => 'danger',
-                                            'qa_manager' => 'primary',
-                                            'qa_reporter' => 'success',
-                                            'webmaster' => 'info',
-                                            default => 'secondary'
-                                        };
+                                        $role_class = 'secondary';
+                                        if ($user['role'] === 'admin') {
+                                            $role_class = 'danger';
+                                        } elseif ($user['role'] === 'qa_manager') {
+                                            $role_class = 'primary';
+                                        } elseif ($user['role'] === 'qa_reporter') {
+                                            $role_class = 'success';
+                                        } elseif ($user['role'] === 'webmaster') {
+                                            $role_class = 'info';
+                                        }
+                                        echo $role_class;
                                     ?>">
                                         <?php echo ucfirst(str_replace('_', ' ', $user['role'])); ?>
                                     </span>

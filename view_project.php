@@ -184,12 +184,15 @@ require_once 'includes/header.php'
     <?php else:
         sort($statuses); // Ensure consistent order
         foreach ($statuses as $status):
-            $status_class = match(true) {
-                str_contains($status, 'wp_conversion') => 'info',
-                str_contains($status, 'page_creation') => 'warning',
-                str_contains($status, 'golive') => 'success',
-                default => 'secondary'
-            };
+            // Replace match expression with if-elseif
+            $status_class = 'secondary'; // Default value
+            if (strpos($status, 'wp_conversion') !== false) {
+                $status_class = 'info';
+            } elseif (strpos($status, 'page_creation') !== false) {
+                $status_class = 'warning';
+            } elseif (strpos($status, 'golive') !== false) {
+                $status_class = 'success';
+            }
     ?>
             <span class="badge bg-<?php echo $status_class; ?> me-1">
                 <?php echo ucwords(str_replace('_', ' ', $status)); ?>
@@ -253,12 +256,16 @@ require_once 'includes/header.php'
         <span class="badge bg-secondary ms-2" title="This item has been archived">Archived</span>
     <?php endif; ?>
                                        <span class="badge bg-<?php
-                                            echo match($item['status']) {
-                                                'passed' => 'success',
-                                                'failed' => 'danger',
-                                                'fixed' => 'warning',
-                                                default => 'secondary'
-                                            };
+                                            // Replace match with if-elseif
+                                            $status_class = 'secondary'; // Default value
+                                            if ($item['status'] === 'passed') {
+                                                $status_class = 'success';
+                                            } elseif ($item['status'] === 'failed') {
+                                                $status_class = 'danger';
+                                            } elseif ($item['status'] === 'fixed') {
+                                                $status_class = 'warning';
+                                            }
+                                            echo $status_class;
                                         ?> ms-2">
                                             <?php echo ucfirst((string)$item['status']); ?>
                                         </span>
@@ -341,12 +348,14 @@ require_once 'includes/header.php'
 
                                             while ($comment = $comments->fetch_assoc()):
                                                 // Set alert class based on user role
-                                                $alertClass = match($comment['role']) {
-                                                    'webmaster' => 'alert-primary',
-                                                    'qa_reporter', 'qa_manager' => 'alert-warning',
-                                                    'admin' => 'alert-info',
-                                                    default => 'alert-secondary'
-                                                };
+                                                $alertClass = 'alert-secondary'; // Default value
+                                                if ($comment['role'] === 'webmaster') {
+                                                    $alertClass = 'alert-primary';
+                                                } elseif ($comment['role'] === 'qa_reporter' || $comment['role'] === 'qa_manager') {
+                                                    $alertClass = 'alert-warning';
+                                                } elseif ($comment['role'] === 'admin') {
+                                                    $alertClass = 'alert-info';
+                                                }
                                             ?>
                                                 <div class="alert <?php echo $alertClass; ?> mb-2">
                                                     <p class="mb-1"><?php echo htmlspecialchars($comment['comment']); ?></p>
