@@ -1,0 +1,47 @@
+# Ignore configuration files with sensitive information
+admin/check_update.php
+
+# Ignore vendor directory
+/vendor/
+
+# Ignore backup and temporary files
+*.bak
+*.tmp
+*.swp
+*~
+
+# Ignore environment-specific files
+.env
+.env.local
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Ignore IDE/Editor folders
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+
+# Ignore logs
+/logs/
+*.log
+
+# Ignore compiled files
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+
+# Ignore packaged files
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
