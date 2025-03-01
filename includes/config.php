@@ -6,24 +6,10 @@ define('DB_USER', 'root');
 define('DB_PASS', '');
 define('DB_NAME', 'bug_reporter_jk_poe');
 
-// Define the base URL
-// Auto-detect the base URL
-$protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://';
-$host = $_SERVER['HTTP_HOST'];
-$script_name = $_SERVER['SCRIPT_NAME'];
-$base_path = dirname(dirname($script_name));
-$base_path = str_replace('\\', '/', $base_path);
-$base_path = rtrim($base_path, '/');
 
-// For local development with subdirectories
-if ($base_path === '') {
-    define('BASE_URL', $protocol . $host . '/');
-} else {
-    define('BASE_URL', $protocol . $host . $base_path . '/');
-}
 
 // For manual override (uncomment and modify if auto-detection doesn't work)
-// define('BASE_URL', 'http://localhost/bug_reporter_jk_poe/');
+define('BASE_URL', 'http://localhost/bug_reporter_jk_poe/');
 
 $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 

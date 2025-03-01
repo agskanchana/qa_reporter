@@ -7,6 +7,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
     <base href="<?php echo BASE_URL; ?>">
+    <link rel="icon" href="<?php echo BASE_URL; ?>/images/favicon.ico">
 </head>
 <body>
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
