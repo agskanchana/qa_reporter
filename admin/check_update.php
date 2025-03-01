@@ -35,49 +35,54 @@ $release_notes = '';
 $update_message = '';
 $update_status = '';
 
-// Check for updates using GitHub API
-try {
-    // Try the releases endpoint first (preferred)
-    $githubApiUrl = "https://api.github.com/repos/{$github_username}/{$github_repo}/releases/latest";
+// GitHub API authentication (optional but recommended to avoid rate limits)
+$github_token = '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'; // If you have a GitHub token, put it here
 
-    $ch = curl_init($githubApiUrl);
+// Add this at the beginning after initialization
+function checkVersionFromRawFile($username, $repo, $branch) {
+    $url = "https://raw.githubusercontent.com/{$username}/{$repo}/{$branch}/version.php";
+
+    $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_USERAGENT, 'QA Reporter Update Checker');
-    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Accept: application/vnd.github.v3+json']);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 10);
 
-    $response = curl_exec($ch);
+    $content = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
-    if ($httpCode === 200 && $response) {
-        $releaseData = json_decode($response, true);
-
-        // Get version from tag (remove 'v' prefix if present)
-        $latestVersion = $releaseData['tag_name'] ?? 'Unknown';
-        if (substr($latestVersion, 0, 1) === 'v') {
-            $latestVersion = substr($latestVersion, 1);
+    if ($httpCode === 200 && !empty($content)) {
+        // Extract version from the content
+        if (preg_match('/return\s+[\'"]([\d\.]+)[\'"];/', $content, $matches)) {
+            return $matches[1];
         }
+    }
 
-        $releaseUrl = $releaseData['html_url'] ?? '#';
-        $downloadUrl = $releaseData['zipball_url'] ?? '#';
-        $releaseNotes = $releaseData['body'] ?? 'No release notes available.';
+    return null;
+}
 
-        // Check if update is available
-        if (version_compare($latestVersion, $current_version, '>')) {
-            $update_available = true;
-            $latest_version = $latestVersion;
-            $download_url = $downloadUrl;
-            $release_notes = $releaseNotes;
-        }
-    } else if ($httpCode === 404) {
-        // If no releases, fall back to checking the main branch
-        $githubApiUrl = "https://api.github.com/repos/{$github_username}/{$github_repo}/contents/version.php?ref={$github_branch}";
+// Check for updates using GitHub API
+$latestVersion = checkVersionFromRawFile($github_username, $github_repo, $github_branch);
+if ($latestVersion && version_compare($latestVersion, $current_version, '>')) {
+    $update_available = true;
+    $latest_version = $latestVersion;
+    $download_url = "https://github.com/{$github_username}/{$github_repo}/archive/refs/heads/{$github_branch}.zip";
+    $release_notes = "Update to version {$latestVersion} from the {$github_branch} branch.";
+} else {
+    // Only if this fails, try the API calls
+    try {
+        // Try the releases endpoint first (preferred)
+        $githubApiUrl = "https://api.github.com/repos/{$github_username}/{$github_repo}/releases/latest";
 
         $ch = curl_init($githubApiUrl);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_USERAGENT, 'QA Reporter Update Checker');
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Accept: application/vnd.github.v3+json']);
+        $headers = ['Accept: application/vnd.github.v3+json'];
+        if (!empty($github_token)) {
+            $headers[] = 'Authorization: token ' . $github_token;
+        }
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_TIMEOUT, 10);
 
         $response = curl_exec($ch);
@@ -85,35 +90,74 @@ try {
         curl_close($ch);
 
         if ($httpCode === 200 && $response) {
-            $fileData = json_decode($response, true);
-            if (isset($fileData['content'])) {
-                $content = base64_decode($fileData['content']);
+            $releaseData = json_decode($response, true);
 
-                // Extract version from the version.php file
-                if (preg_match('/return\s+[\'"]([\d\.]+)[\'"];/', $content, $matches)) {
-                    $latestVersion = $matches[1];
+            // Get version from tag (remove 'v' prefix if present)
+            $latestVersion = $releaseData['tag_name'] ?? 'Unknown';
+            if (substr($latestVersion, 0, 1) === 'v') {
+                $latestVersion = substr($latestVersion, 1);
+            }
 
-                    // Check if update is available
-                    if (version_compare($latestVersion, $current_version, '>')) {
-                        $update_available = true;
-                        $latest_version = $latestVersion;
-                        $download_url = "https://github.com/{$github_username}/{$github_repo}/archive/refs/heads/{$github_branch}.zip";
-                        $release_notes = "Update to version {$latestVersion} from the {$github_branch} branch.";
+            $releaseUrl = $releaseData['html_url'] ?? '#';
+            $downloadUrl = $releaseData['zipball_url'] ?? '#';
+            $releaseNotes = $releaseData['body'] ?? 'No release notes available.';
+
+            // Check if update is available
+            if (version_compare($latestVersion, $current_version, '>')) {
+                $update_available = true;
+                $latest_version = $latestVersion;
+                $download_url = $downloadUrl;
+                $release_notes = $releaseNotes;
+            }
+        } else if ($httpCode === 404) {
+            // If no releases, fall back to checking the main branch
+            $githubApiUrl = "https://api.github.com/repos/{$github_username}/{$github_repo}/contents/version.php?ref={$github_branch}";
+
+            $ch = curl_init($githubApiUrl);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_USERAGENT, 'QA Reporter Update Checker');
+            $headers = ['Accept: application/vnd.github.v3+json'];
+            if (!empty($github_token)) {
+                $headers[] = 'Authorization: token ' . $github_token;
+            }
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($httpCode === 200 && $response) {
+                $fileData = json_decode($response, true);
+                if (isset($fileData['content'])) {
+                    $content = base64_decode($fileData['content']);
+
+                    // Extract version from the version.php file
+                    if (preg_match('/return\s+[\'"]([\d\.]+)[\'"];/', $content, $matches)) {
+                        $latestVersion = $matches[1];
+
+                        // Check if update is available
+                        if (version_compare($latestVersion, $current_version, '>')) {
+                            $update_available = true;
+                            $latest_version = $latestVersion;
+                            $download_url = "https://github.com/{$github_username}/{$github_repo}/archive/refs/heads/{$github_branch}.zip";
+                            $release_notes = "Update to version {$latestVersion} from the {$github_branch} branch.";
+                        }
+                    } else {
+                        $error = 'Could not extract version information from version.php';
                     }
                 } else {
-                    $error = 'Could not extract version information from version.php';
+                    $error = 'Invalid response from GitHub API';
                 }
             } else {
-                $error = 'Invalid response from GitHub API';
+                $error = 'Failed to check for updates. GitHub API returned status code: ' . $httpCode;
             }
         } else {
             $error = 'Failed to check for updates. GitHub API returned status code: ' . $httpCode;
         }
-    } else {
-        $error = 'Failed to check for updates. GitHub API returned status code: ' . $httpCode;
+    } catch (Exception $e) {
+        $error = 'Error checking for updates: ' . $e->getMessage();
     }
-} catch (Exception $e) {
-    $error = 'Error checking for updates: ' . $e->getMessage();
 }
 
 // Handle update process
