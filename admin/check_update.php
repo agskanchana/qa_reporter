@@ -36,7 +36,7 @@ $update_message = '';
 $update_status = '';
 
 // GitHub API authentication (optional but recommended to avoid rate limits)
-$github_token = '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'; // If you have a GitHub token, put it here
+$github_token = 'you-pat-tocken-goes-here'; // If you have a GitHub token, put it here
 
 // Add this at the beginning after initialization
 function checkVersionFromRawFile($username, $repo, $branch) {
