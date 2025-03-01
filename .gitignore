@@ -2,8 +2,6 @@
 admin/check_update.php
 admin/github_config.php
 
-# Ignore vendor directory
-/vendor/
 
 # Ignore backup and temporary files
 *.bak
