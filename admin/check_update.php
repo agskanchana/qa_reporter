@@ -229,6 +229,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update']) && $update_
             'composer.json',
             'composer.lock',
             'vendor',
+            'admin/check_update.php',
             'version.php'
         ];
 
