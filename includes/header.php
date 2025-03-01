@@ -32,6 +32,11 @@
                     <li class="nav-item">
                         <a class="nav-link active" href="manage_checklist.php">Checklist</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="admin/check_update.php">
+                            <i class="bi bi-cloud-download"></i> Check for Updates
+                        </a>
+                    </li>
                     <?php endif; ?>
                 </ul>
                 <div class="navbar-nav">
@@ -41,3 +46,5 @@
             </div>
         </div>
     </nav>
+</body>
+</html>
