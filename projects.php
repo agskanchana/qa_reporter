@@ -53,6 +53,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             case 'add':
                 $project_name = $conn->real_escape_string($_POST['project_name']);
                 $webmaster_id = (int)$_POST['webmaster_id'];
+                $project_deadline = $conn->real_escape_string($_POST['project_deadline']);
+                $wp_conversion_deadline = $conn->real_escape_string($_POST['wp_conversion_deadline']);
+                $gp_link = $conn->real_escape_string($_POST['gp_link']);
+                $ticket_link = $conn->real_escape_string($_POST['ticket_link']);
+                $test_site_link = isset($_POST['test_site_link']) ? $conn->real_escape_string($_POST['test_site_link']) : '';
+                $live_site_link = isset($_POST['live_site_link']) ? $conn->real_escape_string($_POST['live_site_link']) : '';
 
                 // Check if project name already exists
                 $check_query = "SELECT COUNT(*) as count FROM projects WHERE name = ?";
@@ -70,10 +76,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
                 $conn->begin_transaction();
                 try {
-                    // Insert project
-                    $query = "INSERT INTO projects (name, webmaster_id, current_status) VALUES (?, ?, 'wp_conversion')";
+                    // Insert project with new fields
+                    $query = "INSERT INTO projects (name, webmaster_id, current_status, project_deadline,
+                              wp_conversion_deadline, gp_link, ticket_link, test_site_link, live_site_link)
+                              VALUES (?, ?, 'wp_conversion', ?, ?, ?, ?, ?, ?)";
                     $stmt = $conn->prepare($query);
-                    $stmt->bind_param("si", $project_name, $webmaster_id);
+                    $stmt->bind_param("sissssss", $project_name, $webmaster_id, $project_deadline,
+                                     $wp_conversion_deadline, $gp_link, $ticket_link, $test_site_link, $live_site_link);
                     $stmt->execute();
 
                     $project_id = $conn->insert_id;
@@ -101,10 +110,27 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $project_id = (int)$_POST['project_id'];
                 $project_name = $conn->real_escape_string($_POST['project_name']);
                 $webmaster_id = (int)$_POST['webmaster_id'];
+                $project_deadline = $conn->real_escape_string($_POST['project_deadline']);
+                $wp_conversion_deadline = $conn->real_escape_string($_POST['wp_conversion_deadline']);
+                $gp_link = $conn->real_escape_string($_POST['gp_link']);
+                $ticket_link = $conn->real_escape_string($_POST['ticket_link']);
+                $test_site_link = isset($_POST['test_site_link']) ? $conn->real_escape_string($_POST['test_site_link']) : '';
+                $live_site_link = isset($_POST['live_site_link']) ? $conn->real_escape_string($_POST['live_site_link']) : '';
 
-                $query = "UPDATE projects SET name = ?, webmaster_id = ? WHERE id = ?";
+                $query = "UPDATE projects SET
+                          name = ?,
+                          webmaster_id = ?,
+                          project_deadline = ?,
+                          wp_conversion_deadline = ?,
+                          gp_link = ?,
+                          ticket_link = ?,
+                          test_site_link = ?,
+                          live_site_link = ?
+                          WHERE id = ?";
                 $stmt = $conn->prepare($query);
-                $stmt->bind_param("sii", $project_name, $webmaster_id, $project_id);
+                $stmt->bind_param("sissssssi", $project_name, $webmaster_id, $project_deadline,
+                                 $wp_conversion_deadline, $gp_link, $ticket_link,
+                                 $test_site_link, $live_site_link, $project_id);
 
                 if ($stmt->execute()) {
                     $success = "Project updated successfully!";
@@ -213,6 +239,43 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             </select>
                         </div>
                     </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="project_deadline" class="form-label">Project Deadline</label>
+                            <input type="date" class="form-control" id="project_deadline" name="project_deadline" required>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="wp_conversion_deadline" class="form-label">WP Conversion Deadline</label>
+                            <input type="date" class="form-control" id="wp_conversion_deadline" name="wp_conversion_deadline" required>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="gp_link" class="form-label">GP Link (Google Spreadsheet)</label>
+                            <input type="url" class="form-control" id="gp_link" name="gp_link" placeholder="https://docs.google.com/spreadsheets/..." required>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="ticket_link" class="form-label">Ticket Link</label>
+                            <input type="url" class="form-control" id="ticket_link" name="ticket_link" placeholder="https://..." required>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="test_site_link" class="form-label">Test Site Link <span class="text-muted">(optional)</span></label>
+                            <input type="url" class="form-control" id="test_site_link" name="test_site_link" placeholder="https://...">
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="live_site_link" class="form-label">Live Site Link <span class="text-muted">(optional)</span></label>
+                            <input type="url" class="form-control" id="live_site_link" name="live_site_link" placeholder="https://...">
+                        </div>
+                    </div>
+
                     <button type="submit" class="btn btn-primary">Create Project</button>
                 </form>
             </div>
@@ -298,7 +361,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     <!-- Edit Project Modal -->
     <div class="modal fade" id="editProjectModal" tabindex="-1">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">Edit Project</h5>
@@ -309,24 +372,62 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         <input type="hidden" name="action" value="edit">
                         <input type="hidden" name="project_id" id="edit_project_id">
 
-                        <div class="mb-3">
-                            <label for="edit_project_name" class="form-label">Project Name</label>
-                            <input type="text" class="form-control" id="edit_project_name" name="project_name" required>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="edit_project_name" class="form-label">Project Name</label>
+                                <input type="text" class="form-control" id="edit_project_name" name="project_name" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="edit_webmaster_id" class="form-label">Assign Webmaster</label>
+                                <select class="form-select" id="edit_webmaster_id" name="webmaster_id" required>
+                                    <option value="">Select Webmaster</option>
+                                    <?php
+                                    $webmasters->data_seek(0);
+                                    while ($webmaster = $webmasters->fetch_assoc()):
+                                    ?>
+                                        <option value="<?php echo $webmaster['id']; ?>">
+                                            <?php echo htmlspecialchars($webmaster['username']); ?>
+                                        </option>
+                                    <?php endwhile; ?>
+                                </select>
+                            </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label for="edit_webmaster_id" class="form-label">Assign Webmaster</label>
-                            <select class="form-select" id="edit_webmaster_id" name="webmaster_id" required>
-                                <option value="">Select Webmaster</option>
-                                <?php
-                                $webmasters->data_seek(0);
-                                while ($webmaster = $webmasters->fetch_assoc()):
-                                ?>
-                                    <option value="<?php echo $webmaster['id']; ?>">
-                                        <?php echo htmlspecialchars($webmaster['username']); ?>
-                                    </option>
-                                <?php endwhile; ?>
-                            </select>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="edit_project_deadline" class="form-label">Project Deadline</label>
+                                <input type="date" class="form-control" id="edit_project_deadline" name="project_deadline" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="edit_wp_conversion_deadline" class="form-label">WP Conversion Deadline</label>
+                                <input type="date" class="form-control" id="edit_wp_conversion_deadline" name="wp_conversion_deadline" required>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="edit_gp_link" class="form-label">GP Link</label>
+                                <input type="url" class="form-control" id="edit_gp_link" name="gp_link" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="edit_ticket_link" class="form-label">Ticket Link</label>
+                                <input type="url" class="form-control" id="edit_ticket_link" name="ticket_link" required>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="edit_test_site_link" class="form-label">Test Site Link <span class="text-muted">(optional)</span></label>
+                                <input type="url" class="form-control" id="edit_test_site_link" name="test_site_link">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="edit_live_site_link" class="form-label">Live Site Link <span class="text-muted">(optional)</span></label>
+                                <input type="url" class="form-control" id="edit_live_site_link" name="live_site_link">
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -344,6 +445,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         document.getElementById('edit_project_id').value = project.id;
         document.getElementById('edit_project_name').value = project.name;
         document.getElementById('edit_webmaster_id').value = project.webmaster_id;
+
+        // Set the new fields
+        if (project.project_deadline) {
+            document.getElementById('edit_project_deadline').value = project.project_deadline;
+        }
+        if (project.wp_conversion_deadline) {
+            document.getElementById('edit_wp_conversion_deadline').value = project.wp_conversion_deadline;
+        }
+        if (project.gp_link) {
+            document.getElementById('edit_gp_link').value = project.gp_link;
+        }
+        if (project.ticket_link) {
+            document.getElementById('edit_ticket_link').value = project.ticket_link;
+        }
+        if (project.test_site_link) {
+            document.getElementById('edit_test_site_link').value = project.test_site_link;
+        }
+        if (project.live_site_link) {
+            document.getElementById('edit_live_site_link').value = project.live_site_link;
+        }
 
         new bootstrap.Modal(document.getElementById('editProjectModal')).show();
     }
@@ -393,6 +514,71 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 }, 500); // Delay of 500ms to prevent too many requests
             }
         });
+    });
+
+    // Update the document.addEventListener block that handles date fields
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Pre-select deadlines excluding weekends
+        const projectDeadlineInput = document.getElementById('project_deadline');
+        const wpConversionDeadlineInput = document.getElementById('wp_conversion_deadline');
+        const editProjectDeadlineInput = document.getElementById('edit_project_deadline');
+        const editWpConversionDeadlineInput = document.getElementById('edit_wp_conversion_deadline');
+
+        // Function to calculate business days, excluding weekends
+        function addBusinessDays(date, days) {
+            let result = new Date(date);
+            let addedDays = 0;
+
+            while (addedDays < days) {
+                result.setDate(result.getDate() + 1);
+                // Skip weekends (0 = Sunday, 6 = Saturday)
+                if (result.getDay() !== 0 && result.getDay() !== 6) {
+                    addedDays++;
+                }
+            }
+
+            return result;
+        }
+
+        // Get current date
+        const today = new Date();
+
+        // Calculate WP Conversion Deadline (7 business days)
+        const wpConversionDeadline = addBusinessDays(today, 7);
+
+        // Calculate Project Deadline (18 business days)
+        const projectDeadline = addBusinessDays(today, 18);
+
+        // Format dates as YYYY-MM-DD for input fields
+        function formatDateForInput(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        // Set the default values for the date inputs
+        wpConversionDeadlineInput.value = formatDateForInput(wpConversionDeadline);
+        projectDeadlineInput.value = formatDateForInput(projectDeadline);
+
+        // Also apply to the edit form when it's opened
+        const editProjectModal = document.getElementById('editProjectModal');
+        if (editProjectModal) {
+            editProjectModal.addEventListener('show.bs.modal', function() {
+                // Only set default dates if they're not already set from the project data
+                const editWpDeadline = document.getElementById('edit_wp_conversion_deadline');
+                const editProjectDeadline = document.getElementById('edit_project_deadline');
+
+                if (!editWpDeadline.value) {
+                    editWpDeadline.value = formatDateForInput(wpConversionDeadline);
+                }
+
+                if (!editProjectDeadline.value) {
+                    editProjectDeadline.value = formatDateForInput(projectDeadline);
+                }
+            });
+        }
     });
     </script>
 </body>

@@ -392,6 +392,7 @@ document.querySelectorAll('form[data-status-form]').forEach(form => {
         const formData = new FormData(this);
         const statusSelect = this.querySelector('select[name="status"]');
         const submitButton = this.querySelector('button[type="submit"]');
+        const projectId = formData.get('project_id');
 
         // Disable form elements during submission
         statusSelect.disabled = true;
@@ -409,9 +410,7 @@ document.querySelectorAll('form[data-status-form]').forEach(form => {
                 const itemRow = this.closest('.accordion-item');
                 const statusBadge = itemRow.querySelector('.badge');
                 const newStatus = statusSelect.value;
-                console.log(statusBadge);
-                console.log(itemRow);
-// remove return
+
                 // Update badge text and class
                 statusBadge.textContent = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
                 statusBadge.className = `status-badge badge bg-${
@@ -428,6 +427,156 @@ document.querySelectorAll('form[data-status-form]').forEach(form => {
                             txt => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
                         );
                     }
+                }
+
+                // If WP conversion items prompt
+                if (data.showTestSitePrompt) {
+                    // Create bootstrap modal for test site link
+                    const modalHtml = `
+                        <div class="modal fade" id="testSiteModal" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Test Site Link Required</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <p>All WP Conversion items are now fixed. Please provide a test site link:</p>
+                                        <div class="mb-3">
+                                            <label for="test-site-input" class="form-label">Test Site URL</label>
+                                            <input type="url" class="form-control" id="test-site-input" placeholder="https://..." required>
+                                            <div class="invalid-feedback">Please enter a valid URL</div>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-primary" id="save-test-site-btn">Save</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+                    // Append modal to body
+                    const modalContainer = document.createElement('div');
+                    modalContainer.innerHTML = modalHtml;
+                    document.body.appendChild(modalContainer);
+
+                    // Show the modal
+                    const testSiteModal = new bootstrap.Modal(document.getElementById('testSiteModal'));
+                    testSiteModal.show();
+
+                    // Handle save button
+                    document.getElementById('save-test-site-btn').addEventListener('click', function() {
+                        const testSiteInput = document.getElementById('test-site-input');
+                        if (testSiteInput.checkValidity()) {
+                            const testSiteUrl = testSiteInput.value;
+
+                            // Save test site URL via AJAX
+                            fetch('save_test_site_url.php', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ project_id: projectId, test_site_url: testSiteUrl })
+                            })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.success) {
+                                    // Close the modal
+                                    testSiteModal.hide();
+                                    // Remove modal from DOM
+                                    modalContainer.remove();
+                                } else {
+                                    // Show error message
+                                    testSiteInput.classList.add('is-invalid');
+                                    testSiteInput.nextElementSibling.textContent = data.error || 'An error occurred while saving the test site URL.';
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Error:', error);
+                                // Show error message
+                                testSiteInput.classList.add('is-invalid');
+                                testSiteInput.nextElementSibling.textContent = 'An error occurred while saving the test site URL.';
+                            });
+                        } else {
+                            testSiteInput.classList.add('is-invalid');
+                        }
+                    });
+                }
+
+                // If Golive items prompt
+                if (data.showLiveSitePrompt) {
+                    // Create bootstrap modal for live site link
+                    const modalHtml = `
+                        <div class="modal fade" id="liveSiteModal" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Live Site Link Required</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <p>Please provide the live site link:</p>
+                                        <div class="mb-3">
+                                            <label for="live-site-input" class="form-label">Live Site URL</label>
+                                            <input type="url" class="form-control" id="live-site-input" placeholder="https://..." required>
+                                            <div class="invalid-feedback">Please enter a valid URL</div>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-primary" id="save-live-site-btn">Save</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+                    // Append modal to body
+                    const modalContainer = document.createElement('div');
+                    modalContainer.innerHTML = modalHtml;
+                    document.body.appendChild(modalContainer);
+
+                    // Show the modal
+                    const liveSiteModal = new bootstrap.Modal(document.getElementById('liveSiteModal'));
+                    liveSiteModal.show();
+
+                    // Handle save button
+                    document.getElementById('save-live-site-btn').addEventListener('click', function() {
+                        const liveSiteInput = document.getElementById('live-site-input');
+                        if (liveSiteInput.checkValidity()) {
+                            const liveSiteUrl = liveSiteInput.value;
+
+                            // Save live site URL via AJAX
+                            fetch('save_live_site_url.php', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ project_id: projectId, live_site_url: liveSiteUrl })
+                            })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.success) {
+                                    // Close the modal
+                                    liveSiteModal.hide();
+                                    // Remove modal from DOM
+                                    modalContainer.remove();
+                                } else {
+                                    // Show error message
+                                    liveSiteInput.classList.add('is-invalid');
+                                    liveSiteInput.nextElementSibling.textContent = data.error || 'An error occurred while saving the live site URL.';
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Error:', error);
+                                // Show error message
+                                liveSiteInput.classList.add('is-invalid');
+                                liveSiteInput.nextElementSibling.textContent = 'An error occurred while saving the live site URL.';
+                            });
+                        } else {
+                            liveSiteInput.classList.add('is-invalid');
+                        }
+                    });
                 }
 
                 // Add success message

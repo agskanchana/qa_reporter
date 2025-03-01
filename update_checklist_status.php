@@ -118,6 +118,36 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stages_result = $stmt->get_result();
 
             $new_statuses = $current_statuses;
+            $show_test_site_prompt = false;
+            $show_live_site_prompt = false;
+
+            // Check if this checklist item is in wp_conversion stage and is being marked as fixed
+            if ($current_stage === 'wp_conversion' && $new_status === 'fixed') {
+                // Check if the test_site_link is empty
+                $test_site_query = "SELECT test_site_link FROM projects WHERE id = ?";
+                $stmt = $conn->prepare($test_site_query);
+                $stmt->bind_param("i", $project_id);
+                $stmt->execute();
+                $test_site_result = $stmt->get_result();
+                $test_site_data = $test_site_result->fetch_assoc();
+
+                // Show prompt if test site link is empty
+                $show_test_site_prompt = empty($test_site_data['test_site_link']);
+            }
+
+            // Check if this checklist item is in golive stage and is being marked as fixed
+            if ($current_stage === 'golive' && $new_status === 'fixed') {
+                // Check if the live_site_link is empty
+                $live_site_query = "SELECT live_site_link FROM projects WHERE id = ?";
+                $stmt = $conn->prepare($live_site_query);
+                $stmt->bind_param("i", $project_id);
+                $stmt->execute();
+                $live_site_result = $stmt->get_result();
+                $live_site_data = $live_site_result->fetch_assoc();
+
+                // Show prompt if live site link is empty
+                $show_live_site_prompt = empty($live_site_data['live_site_link']);
+            }
 
             // Process each stage
             while ($stage_row = $stages_result->fetch_assoc()) {
@@ -222,7 +252,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     sort($current_statuses);
                     $new_project_status = implode(',', array_unique($current_statuses));
                     $update_project = "UPDATE projects SET current_status = ? WHERE id = ?";
-                    $stmt = $conn->prepare($update_project);
+                    $stmt->prepare($update_project);
                     $stmt->bind_param("si", $new_project_status, $project_id);
                     $stmt->execute();
                 }
@@ -230,9 +260,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         $conn->commit();
+        // Include both prompt flags in the response
         echo json_encode([
             'success' => true,
-            'newStatus' => $new_project_status ?? $current_project_status
+            'newStatus' => $new_project_status ?? $current_project_status,
+            'showTestSitePrompt' => isset($show_test_site_prompt) && $show_test_site_prompt === true,
+            'showLiveSitePrompt' => isset($show_live_site_prompt) && $show_live_site_prompt === true
         ]);
 
     } catch (Exception $e) {
