@@ -235,3 +235,25 @@ function removeChecklistItemSafely($item_id) {
         throw $e;
     }
 }
+
+/**
+ * Add a notification for a user or role
+ *
+ * @param string $message The notification message
+ * @param string $type The notification type (info, warning, success, danger)
+ * @param int|null $user_id The user ID (null for role-based notifications)
+ * @param string|null $role The role (null for user-specific notifications)
+ * @return bool True on success, false on failure
+ */
+function addNotification($message, $type = 'info', $user_id = null, $role = null) {
+    global $conn;
+
+    if (!$user_id && !$role) {
+        return false; // Must specify either user_id or role
+    }
+
+    $stmt = $conn->prepare("INSERT INTO notifications (user_id, role, message, type) VALUES (?, ?, ?, ?)");
+    $stmt->bind_param("isss", $user_id, $role, $message, $type);
+
+    return $stmt->execute();
+}

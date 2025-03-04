@@ -27,7 +27,9 @@ if ($user_role === 'qa_reporter') {
 */
 // Get project details
 $query = "SELECT p.*, u.username as webmaster_name,
-          COALESCE(p.current_status, 'wp_conversion') as current_status
+          COALESCE(p.current_status, 'wp_conversion') as current_status,
+          p.project_deadline,
+          p.wp_conversion_deadline
           FROM projects p
           LEFT JOIN users u ON p.webmaster_id = u.id
           WHERE p.id = ?";
@@ -169,231 +171,409 @@ require_once 'includes/header.php'
 
 ?>
 
-
-
-    <div class="container mt-4">
-        <div class="row mb-4">
-            <div class="col">
-                <h2><?php echo htmlspecialchars($project['name']); ?></h2>
-                <p class="text-muted">
-    Status:
-    <?php
-    $statuses = !empty($project['current_status']) ? explode(',', $project['current_status']) : [];
-    if (empty($statuses)): ?>
-        <span class="badge bg-secondary me-1">No Status</span>
-    <?php else:
-        sort($statuses); // Ensure consistent order
-        foreach ($statuses as $status):
-            // Replace match expression with if-elseif
-            $status_class = 'secondary'; // Default value
-            if (strpos($status, 'wp_conversion') !== false) {
-                $status_class = 'info';
-            } elseif (strpos($status, 'page_creation') !== false) {
-                $status_class = 'warning';
-            } elseif (strpos($status, 'golive') !== false) {
-                $status_class = 'success';
-            }
-    ?>
-            <span class="badge bg-<?php echo $status_class; ?> me-1">
-                <?php echo ucwords(str_replace('_', ' ', $status)); ?>
-            </span>
-    <?php
-        endforeach;
-    endif;
-    ?>
-    Webmaster: <?php
-    if ($project['webmaster_name']) {
-        echo htmlspecialchars($project['webmaster_name']);
-    } else {
-        echo '<span class="badge bg-danger">Deleted User</span>';
-    }
-    ?>
-</p>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-body">
-                <ul class="nav nav-tabs" id="stageTabs" role="tablist">
-                    <li class="nav-item">
-                        <a class="nav-link active" id="wp-tab" data-bs-toggle="tab" href="#wp" role="tab">
-                            WP Conversion
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" id="page-tab" data-bs-toggle="tab" href="#page" role="tab">
-                            Page Creation
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" id="golive-tab" data-bs-toggle="tab" href="#golive" role="tab">
-                            Golive
-                        </a>
-                    </li>
-                </ul>
-
-                <div class="tab-content mt-3" id="stageTabContent">
-                    <?php
-                    $stages = ['wp_conversion', 'page_creation', 'golive'];
-                    foreach ($stages as $stage):
-                        $active = $stage == 'wp_conversion' ? 'show active' : '';
-                    ?>
-                    <div class="tab-pane fade <?php echo $active; ?>"
-                         id="<?php echo explode('_', $stage)[0]; ?>" role="tabpanel">
-                        <div class="accordion" id="<?php echo $stage; ?>Accordion">
-                            <?php
-                            $checklist_items->data_seek(0);
-                            while ($item = $checklist_items->fetch_assoc()):
-                                if ($item['stage'] == $stage):
-                            ?>
-                            <div class="accordion-item">
-                                <h2 class="accordion-header">
-                                    <button class="accordion-button collapsed" type="button"
-                                            data-bs-toggle="collapse"
-                                            data-bs-target="#item<?php echo $item['id']; ?>">
-                                        <?php echo htmlspecialchars($item['title']); ?>
-                                        <?php if ($item['is_archived']): ?>
-        <span class="badge bg-secondary ms-2" title="This item has been archived">Archived</span>
-    <?php endif; ?>
-                                       <span class="badge bg-<?php
-                                            // Replace match with if-elseif
-                                            $status_class = 'secondary'; // Default value
-                                            if ($item['status'] === 'passed') {
-                                                $status_class = 'success';
-                                            } elseif ($item['status'] === 'failed') {
-                                                $status_class = 'danger';
-                                            } elseif ($item['status'] === 'fixed') {
-                                                $status_class = 'warning';
-                                            }
-                                            echo $status_class;
-                                        ?> ms-2">
-                                            <?php echo ucfirst((string)$item['status']); ?>
-                                        </span>
-                                        <?php if ($item['comment_count'] > 0): ?>
-                                            <span class="badge bg-info ms-2">
-                                                <i class="bi bi-chat"></i> <?php echo $item['comment_count']; ?>
-                                            </span>
-                                        <?php endif; ?>
-                                    </button>
-                                </h2>
-                                <div id="item<?php echo $item['id']; ?>" class="accordion-collapse collapse">
-                                    <div class="accordion-body">
-                                        <div class="row">
-                                            <div class="col-md-6">
-                                                <h6>How to Check:</h6>
-                                                <p><?php echo nl2br(htmlspecialchars($item['how_to_check'])); ?></p>
-                                            </div>
-                                            <div class="col-md-6">
-                                                <h6>How to Fix:</h6>
-                                                <p><?php echo nl2br(htmlspecialchars($item['how_to_fix'])); ?></p>
-                                            </div>
-                                        </div>
-
-                                        <!-- Status Update Form -->
-                                        <!-- In the checklist items loop in view_project.php -->
-                                        <?php
-                                        $isDisabled = false;
-                                        $current_status = $project['current_status'];
-                                        $user_role = getUserRole();
-
-                                        // Only disable for QA roles when not in QA stage
-                                        if (in_array($user_role, ['qa_reporter', 'qa_manager']) && strpos($current_status, '_qa') === false) {
-                                            $isDisabled = true;
-                                        }
-                                        ?>
-
-                                        <form method="POST" data-status-form class="mt-3">
-                                            <input type="hidden" name="action" value="update_status">
-                                            <input type="hidden" name="item_id" value="<?php echo $item['id']; ?>">
-                                            <input type="hidden" name="project_id" value="<?php echo $project['id']; ?>">
-
-                                            <div class="row">
-                                                <div class="col-md-6">
-                                                    <select name="status" class="form-select" required <?php echo $isDisabled ? 'disabled' : ''; ?>>
-                                                        <option value="">Select Status</option>
-                                                        <?php if ($user_role == 'webmaster'): ?>
-                                                            <option value="fixed" <?php echo $item['status'] == 'fixed' ? 'selected' : ''; ?>>Fixed</option>
-                                                        <?php endif; ?>
-                                                        <?php if (in_array($user_role, ['qa_reporter', 'qa_manager', 'admin'])): ?>
-                                                            <option value="passed" <?php echo $item['status'] == 'passed' ? 'selected' : ''; ?>>Passed</option>
-                                                            <option value="failed" <?php echo $item['status'] == 'failed' ? 'selected' : ''; ?>>Failed</option>
-                                                        <?php endif; ?>
-                                                    </select>
-                                                </div>
-                                                <div class="col-md-6">
-                                                    <button type="submit" class="btn btn-primary" <?php echo $isDisabled ? 'disabled' : ''; ?>>
-                                                        Update Status
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            <div class="mt-3 mb-3">
-                                                <textarea name="comment" class="form-control" placeholder="Add a comment (optional)"
-                                                        <?php echo $isDisabled ? 'disabled' : ''; ?>></textarea>
-                                            </div>
-                                        </form>
-
-                                        <!-- Comments Section -->
-
-                                        <div class="comments-section">
-                                            <?php
-                                            $comments_query = "SELECT c.*, u.username, u.role FROM comments c
-                                                            JOIN users u ON c.user_id = u.id
-                                                            WHERE c.project_id = ? AND c.checklist_item_id = ?
-                                                            ORDER BY c.created_at DESC";
-                                            $stmt = $conn->prepare($comments_query);
-                                            $stmt->bind_param("ii", $project['id'], $item['id']);
-                                            $stmt->execute();
-                                            $comments = $stmt->get_result();
-
-                                            while ($comment = $comments->fetch_assoc()):
-                                                // Set alert class based on user role
-                                                $alertClass = 'alert-secondary'; // Default value
-                                                if ($comment['role'] === 'webmaster') {
-                                                    $alertClass = 'alert-primary';
-                                                } elseif ($comment['role'] === 'qa_reporter' || $comment['role'] === 'qa_manager') {
-                                                    $alertClass = 'alert-warning';
-                                                } elseif ($comment['role'] === 'admin') {
-                                                    $alertClass = 'alert-info';
-                                                }
-                                            ?>
-                                                <div class="alert <?php echo $alertClass; ?> mb-2">
-                                                    <p class="mb-1"><?php echo htmlspecialchars($comment['comment']); ?></p>
-                                                    <small>
-                                                        By <?php echo htmlspecialchars($comment['username']); ?>
-                                                        (<?php echo ucfirst($comment['role']); ?>) -
-                                                        <?php echo date('Y-m-d H:i:s', strtotime($comment['created_at'])); ?>
-                                                    </small>
-                                                </div>
-                                            <?php endwhile; ?>
-                                        </div>
-
-
-                                    </div>
-                                </div>
-                            </div>
-                            <?php
-                                endif;
-                            endwhile;
-                            ?>
-                        </div>
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2><?php echo htmlspecialchars($project['name']); ?></h2>
+            <div class="text-muted mb-3">
+                <div class="row mb-2">
+                    <div class="col-md-6">
+                        <strong>Status:</strong>
+                        <?php
+                        $statuses = !empty($project['current_status']) ? explode(',', $project['current_status']) : [];
+                        if (empty($statuses)): ?>
+                            <span class="badge bg-secondary me-1">No Status</span>
+                        <?php else:
+                            sort($statuses); // Ensure consistent order
+                            foreach ($statuses as $status):
+                                // Replace match expression with if-elseif
+                                $status_class = 'secondary'; // Default value
+                                if (strpos($status, 'wp_conversion') !== false) {
+                                    $status_class = 'info';
+                                } elseif (strpos($status, 'page_creation') !== false) {
+                                    $status_class = 'warning';
+                                } elseif (strpos($status, 'golive') !== false) {
+                                    $status_class = 'success';
+                                }
+                        ?>
+                                <span class="badge bg-<?php echo $status_class; ?> me-1">
+                                    <?php echo ucwords(str_replace('_', ' ', $status)); ?>
+                                </span>
+                        <?php
+                            endforeach;
+                        endif;
+                        ?>
                     </div>
-                    <?php endforeach; ?>
+                    <div class="col-md-6">
+                        <strong>Webmaster:</strong>
+                        <?php
+                        if ($project['webmaster_name']) {
+                            echo htmlspecialchars($project['webmaster_name']);
+                        } else {
+                            echo '<span class="badge bg-danger">Deleted User</span>';
+                        }
+                        ?>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <strong>WP Conversion Deadline:</strong>
+                        <?php
+                        // Check if there's an approved extension
+                        $wp_extension_query = "SELECT original_deadline, requested_deadline, status
+                                              FROM deadline_extension_requests
+                                              WHERE project_id = ? AND deadline_type = 'wp_conversion'
+                                              ORDER BY created_at DESC LIMIT 1";
+                        $stmt = $conn->prepare($wp_extension_query);
+                        $stmt->bind_param("i", $project_id);
+                        $stmt->execute();
+                        $wp_extension = $stmt->get_result()->fetch_assoc();
+
+                        $wp_deadline_display = '';
+                        $has_pending_wp_extension = false;
+                        $wp_original_deadline = !empty($project['wp_conversion_deadline']) ? $project['wp_conversion_deadline'] : '';
+                        $wp_deadline = $wp_original_deadline;
+
+                        // If there's an approved extension, use the new deadline
+                        if ($wp_extension && $wp_extension['status'] === 'approved') {
+                            $wp_deadline = $wp_extension['requested_deadline'];
+                            $wp_original_deadline = $wp_extension['original_deadline'];
+                            $wp_deadline_display = ' <span class="badge bg-info">Extended</span>';
+                        } elseif ($wp_extension && $wp_extension['status'] === 'pending') {
+                            $has_pending_wp_extension = true;
+                            $wp_deadline_display = ' <span class="badge bg-warning">Extension Pending</span>';
+                        }
+
+                        if (!empty($wp_deadline)) {
+                            $wp_deadline_obj = new DateTime($wp_deadline);
+                            $today = new DateTime();
+                            $interval = $today->diff($wp_deadline_obj);
+                            $days_remaining = $interval->days;
+                            if (!$interval->invert) {
+                                // Future date
+                                $days_text = $days_remaining . ' days remaining';
+                                $badge_class = $days_remaining <= 3 ? 'bg-warning' : 'bg-info';
+                            } else {
+                                // Past date
+                                $days_text = 'Overdue by ' . $days_remaining . ' days';
+                                $badge_class = 'bg-danger';
+                            }
+
+                            echo date('F j, Y', strtotime($wp_deadline));
+                            echo ' <span class="badge ' . $badge_class . '">' . $days_text . '</span>';
+                            echo $wp_deadline_display;
+
+                            // Show original deadline if extended
+                            if (!empty($wp_original_deadline) && $wp_deadline !== $wp_original_deadline) {
+                                echo '<br><small class="text-muted">Original: ' . date('F j, Y', strtotime($wp_original_deadline)) . '</small>';
+                            }
+
+                            // Show extension request button for webmasters
+                            if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id'] && !$has_pending_wp_extension) {
+                                echo ' <button type="button" class="btn btn-sm btn-outline-primary"
+                                        data-bs-toggle="modal" data-bs-target="#wpExtensionModal">
+                                        Request Extension
+                                      </button>';
+                            }
+                        } else {
+                            echo '<span class="text-muted">Not set</span>';
+                        }
+                        ?>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Project Deadline:</strong>
+                        <?php
+                        if (!empty($project['project_deadline'])) {
+                            $project_deadline_obj = new DateTime($project['project_deadline']);
+                            $today = new DateTime();
+                            $interval = $today->diff($project_deadline_obj);
+                            $days_remaining = $interval->days;
+                            if (!$interval->invert) {
+                                // Future date
+                                $days_text = $days_remaining . ' days remaining';
+                                $badge_class = $days_remaining <= 7 ? 'bg-warning' : 'bg-info';
+                            } else {
+                                // Past date
+                                $days_text = 'Overdue by ' . $days_remaining . ' days';
+                                $badge_class = 'bg-danger';
+                            }
+
+                            echo date('F j, Y', strtotime($project['project_deadline']));
+                            echo ' <span class="badge ' . $badge_class . '">' . $days_text . '</span>';
+                        } else {
+                            echo '<span class="text-muted">Not set</span>';
+                        }
+                        ?>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-    <?php
-    $current_user_query = "SELECT username FROM users WHERE id = ?";
-    $stmt = $conn->prepare($current_user_query);
-    $stmt->bind_param("i", $_SESSION['user_id']);
-    $stmt->execute();
-    $current_user_result = $stmt->get_result();
-    $current_user = $current_user_result->fetch_assoc();
+
+    <div class="card">
+        <div class="card-body">
+            <ul class="nav nav-tabs" id="stageTabs" role="tablist">
+                <li class="nav-item">
+                    <a class="nav-link active" id="wp-tab" data-bs-toggle="tab" href="#wp" role="tab">
+                        WP Conversion
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="page-tab" data-bs-toggle="tab" href="#page" role="tab">
+                        Page Creation
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="golive-tab" data-bs-toggle="tab" href="#golive" role="tab">
+                        Golive
+                    </a>
+                </li>
+            </ul>
+
+            <div class="tab-content mt-3" id="stageTabContent">
+                <?php
+                $stages = ['wp_conversion', 'page_creation', 'golive'];
+                foreach ($stages as $stage):
+                    $active = $stage == 'wp_conversion' ? 'show active' : '';
+                ?>
+                <div class="tab-pane fade <?php echo $active; ?>"
+                     id="<?php echo explode('_', $stage)[0]; ?>" role="tabpanel">
+                    <div class="accordion" id="<?php echo $stage; ?>Accordion">
+                        <?php
+                        $checklist_items->data_seek(0);
+                        while ($item = $checklist_items->fetch_assoc()):
+                            if ($item['stage'] == $stage):
+                        ?>
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button"
+                                        data-bs-toggle="collapse"
+                                        data-bs-target="#item<?php echo $item['id']; ?>">
+                                    <?php echo htmlspecialchars($item['title']); ?>
+                                    <?php if ($item['is_archived']): ?>
+    <span class="badge bg-secondary ms-2" title="This item has been archived">Archived</span>
+<?php endif; ?>
+                                   <span class="badge bg-<?php
+                                        // Replace match with if-elseif
+                                        $status_class = 'secondary'; // Default value
+                                        if ($item['status'] === 'passed') {
+                                            $status_class = 'success';
+                                        } elseif ($item['status'] === 'failed') {
+                                            $status_class = 'danger';
+                                        } elseif ($item['status'] === 'fixed') {
+                                            $status_class = 'warning';
+                                        }
+                                        echo $status_class;
+                                    ?> ms-2">
+                                        <?php echo ucfirst((string)$item['status']); ?>
+                                    </span>
+                                    <?php if ($item['comment_count'] > 0): ?>
+                                        <span class="badge bg-info ms-2">
+                                            <i class="bi bi-chat"></i> <?php echo $item['comment_count']; ?>
+                                        </span>
+                                    <?php endif; ?>
+                                </button>
+                            </h2>
+                            <div id="item<?php echo $item['id']; ?>" class="accordion-collapse collapse">
+                                <div class="accordion-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <h6>How to Check:</h6>
+                                            <p><?php echo nl2br(htmlspecialchars($item['how_to_check'])); ?></p>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <h6>How to Fix:</h6>
+                                            <p><?php echo nl2br(htmlspecialchars($item['how_to_fix'])); ?></p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Status Update Form -->
+                                    <!-- In the checklist items loop in view_project.php -->
+                                    <?php
+                                    $isDisabled = false;
+                                    $current_status = $project['current_status'];
+                                    $user_role = getUserRole();
+
+                                    // Only disable for QA roles when not in QA stage
+                                    if (in_array($user_role, ['qa_reporter', 'qa_manager']) && strpos($current_status, '_qa') === false) {
+                                        $isDisabled = true;
+                                    }
+                                    ?>
+
+                                    <form method="POST" data-status-form class="mt-3">
+                                        <input type="hidden" name="action" value="update_status">
+                                        <input type="hidden" name="item_id" value="<?php echo $item['id']; ?>">
+                                        <input type="hidden" name="project_id" value="<?php echo $project['id']; ?>">
+
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <select name="status" class="form-select" required <?php echo $isDisabled ? 'disabled' : ''; ?>>
+                                                    <option value="">Select Status</option>
+                                                    <?php if ($user_role == 'webmaster'): ?>
+                                                        <option value="fixed" <?php echo $item['status'] == 'fixed' ? 'selected' : ''; ?>>Fixed</option>
+                                                    <?php endif; ?>
+                                                    <?php if (in_array($user_role, ['qa_reporter', 'qa_manager', 'admin'])): ?>
+                                                        <option value="passed" <?php echo $item['status'] == 'passed' ? 'selected' : ''; ?>>Passed</option>
+                                                        <option value="failed" <?php echo $item['status'] == 'failed' ? 'selected' : ''; ?>>Failed</option>
+                                                    <?php endif; ?>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <button type="submit" class="btn btn-primary" <?php echo $isDisabled ? 'disabled' : ''; ?>>
+                                                    Update Status
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div class="mt-3 mb-3">
+                                            <textarea name="comment" class="form-control" placeholder="Add a comment (optional)"
+                                                    <?php echo $isDisabled ? 'disabled' : ''; ?>></textarea>
+                                        </div>
+                                    </form>
+
+                                    <!-- Comments Section -->
+
+                                    <div class="comments-section">
+                                        <?php
+                                        $comments_query = "SELECT c.*, u.username, u.role FROM comments c
+                                                        JOIN users u ON c.user_id = u.id
+                                                        WHERE c.project_id = ? AND c.checklist_item_id = ?
+                                                        ORDER BY c.created_at DESC";
+                                        $stmt = $conn->prepare($comments_query);
+                                        $stmt->bind_param("ii", $project['id'], $item['id']);
+                                        $stmt->execute();
+                                        $comments = $stmt->get_result();
+
+                                        while ($comment = $comments->fetch_assoc()):
+                                            // Set alert class based on user role
+                                            $alertClass = 'alert-secondary'; // Default value
+                                            if ($comment['role'] === 'webmaster') {
+                                                $alertClass = 'alert-primary';
+                                            } elseif ($comment['role'] === 'qa_reporter' || $comment['role'] === 'qa_manager') {
+                                                $alertClass = 'alert-warning';
+                                            } elseif ($comment['role'] === 'admin') {
+                                                $alertClass = 'alert-info';
+                                            }
+                                        ?>
+                                            <div class="alert <?php echo $alertClass; ?> mb-2">
+                                                <p class="mb-1"><?php echo htmlspecialchars($comment['comment']); ?></p>
+                                                <small>
+                                                    By <?php echo htmlspecialchars($comment['username']); ?>
+                                                    (<?php echo ucfirst($comment['role']); ?>) -
+                                                    <?php echo date('Y-m-d H:i:s', strtotime($comment['created_at'])); ?>
+                                                </small>
+                                            </div>
+                                        <?php endwhile; ?>
+                                    </div>
+
+
+                                </div>
+                            </div>
+                        </div>
+                        <?php
+                            endif;
+                        endwhile;
+                        ?>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+</div>
+<?php
+$current_user_query = "SELECT username FROM users WHERE id = ?";
+$stmt = $conn->prepare($current_user_query);
+$stmt->bind_param("i", $_SESSION['user_id']);
+$stmt->execute();
+$current_user_result = $stmt->get_result();
+$current_user = $current_user_result->fetch_assoc();
 ?>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        const currentUserName = <?php echo json_encode($current_user['username']); ?>;
+<?php if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id']): ?>
+<!-- WP Conversion Deadline Extension Request Modal -->
+<div class="modal fade" id="wpExtensionModal" tabindex="-1" aria-labelledby="wpExtensionModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="wpExtensionModalLabel">Request WP Conversion Deadline Extension</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="wpExtensionForm" action="request_deadline_extension.php" method="POST">
+                <div class="modal-body">
+                    <input type="hidden" name="project_id" value="<?php echo $project_id; ?>">
+                    <input type="hidden" name="deadline_type" value="wp_conversion">
+                    <input type="hidden" name="original_deadline" value="<?php echo $wp_original_deadline; ?>">
+
+                    <div class="mb-3">
+                        <label for="currentWpDeadline" class="form-label">Current Deadline</label>
+                        <input type="text" class="form-control" id="currentWpDeadline" value="<?php echo date('F j, Y', strtotime($wp_deadline)); ?>" disabled>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="requestedWpDeadline" class="form-label">Requested Deadline</label>
+                        <input type="date" class="form-control" id="requestedWpDeadline" name="requested_deadline" required
+                               min="<?php echo date('Y-m-d', strtotime('+1 day')); ?>">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="wpExtensionReason" class="form-label">Reason for Extension</label>
+                        <textarea class="form-control" id="wpExtensionReason" name="reason" rows="3" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Submit Request</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Project Deadline Extension Request Modal -->
+<div class="modal fade" id="projectExtensionModal" tabindex="-1" aria-labelledby="projectExtensionModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="projectExtensionModalLabel">Request Project Deadline Extension</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="projectExtensionForm" action="request_deadline_extension.php" method="POST">
+                <div class="modal-body">
+                    <input type="hidden" name="project_id" value="<?php echo $project_id; ?>">
+                    <input type="hidden" name="deadline_type" value="project">
+                    <input type="hidden" name="original_deadline" value="<?php echo $project_original_deadline; ?>">
+
+                    <div class="mb-3">
+                        <label for="currentProjectDeadline" class="form-label">Current Deadline</label>
+                        <input type="text" class="form-control" id="currentProjectDeadline" value="<?php echo date('F j, Y', strtotime($project_deadline)); ?>" disabled>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="requestedProjectDeadline" class="form-label">Requested Deadline</label>
+                        <input type="date" class="form-control" id="requestedProjectDeadline" name="requested_deadline" required
+                               min="<?php echo date('Y-m-d', strtotime('+1 day')); ?>">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="projectExtensionReason" class="form-label">Reason for Extension</label>
+                        <textarea class="form-control" id="projectExtensionReason" name="reason" rows="3" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Submit Request</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- Then continue with the existing script tags -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const currentUserName = <?php echo json_encode($current_user['username']); ?>;
 document.querySelectorAll('form[data-status-form]').forEach(form => {
     form.addEventListener('submit', function(e) {
         e.preventDefault();

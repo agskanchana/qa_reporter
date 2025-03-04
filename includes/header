@@ -22,10 +22,16 @@
                         <a class="nav-link" href="<?php echo url('dashboard.php'); ?>">Dashboard</a>
                     </li>
                     <?php if (in_array($user_role, ['admin', 'qa_manager'])): ?>
-                    <li class="nav-item">
-                        <a class="nav-link" href="<?php echo url('projects.php'); ?>">Projects</a>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="projectsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            Projects
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="projectsDropdown">
+                            <li><a class="dropdown-item" href="<?php echo url('projects.php'); ?>">All Projects</a></li>
+                            <li><a class="dropdown-item" href="<?php echo url('projects.php?status=active'); ?>">Active</a></li>
+                        </ul>
                     </li>
-                        <li class="nav-item">
+                    <li class="nav-item">
                         <a class="nav-link" href="<?php echo url('users.php'); ?>">Users</a>
                     </li>
                     <li class="nav-item">
@@ -34,7 +40,11 @@
                     <li class="nav-item">
                         <a class="nav-link " href="<?php echo url('manage_checklist.php'); ?>">Checklist</a>
                     </li>
-
+                    <li class="nav-item">
+                        <a class="nav-link" href="<?php echo url('admin/check_update.php'); ?>">
+                            <i class="bi bi-cloud-download"></i> Check for Updates
+                        </a>
+                    </li>
                     <!-- Add this somewhere in the header navigation for admin users -->
                     <?php if (getUserRole() === 'admin'): ?>
                     <li class="nav-item">
@@ -55,14 +65,9 @@
                     <?php endif; ?>
                 </ul>
                 <div class="navbar-nav">
-                <a class="nav-link" href="<?php echo url('admin/check_update.php'); ?>">
-                            <i class="bi bi-cloud-download"></i>
-                        </a>
                     <span class="nav-item nav-link text-light">Welcome, <?php echo htmlspecialchars($_SESSION['username']); ?></span>
                     <a class="nav-link" href="<?php echo url('logout.php'); ?>">Logout</a>
                 </div>
             </div>
         </div>
     </nav>
-</body>
-</html>
