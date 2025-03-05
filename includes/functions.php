@@ -248,12 +248,155 @@ function removeChecklistItemSafely($item_id) {
 function addNotification($message, $type = 'info', $user_id = null, $role = null) {
     global $conn;
 
-    if (!$user_id && !$role) {
-        return false; // Must specify either user_id or role
+    // Validate inputs
+    if (empty($message)) {
+        return false;
     }
 
-    $stmt = $conn->prepare("INSERT INTO notifications (user_id, role, message, type) VALUES (?, ?, ?, ?)");
-    $stmt->bind_param("isss", $user_id, $role, $message, $type);
+    // Validate type
+    $valid_types = ['info', 'warning', 'success', 'danger'];
+    if (!in_array($type, $valid_types)) {
+        $type = 'info'; // Default to info if invalid
+    }
+
+    // Validate role if provided
+    if ($role !== null) {
+        $valid_roles = ['admin', 'qa_manager', 'qa_reporter', 'webmaster'];
+        if (!in_array($role, $valid_roles)) {
+            $role = null; // Set to null if not a valid role
+        }
+    }
+
+    // For role-based notifications with no specific user, set user_id to NULL
+    if ($role !== null && $user_id === null) {
+        $query = "INSERT INTO notifications (user_id, role, message, type, is_read)
+                  VALUES (NULL, ?, ?, ?, 0)";
+        $stmt = $conn->prepare($query);
+        $stmt->bind_param("sss", $role, $message, $type);
+    } else {
+        // For specific user notifications
+        $query = "INSERT INTO notifications (user_id, role, message, type, is_read)
+                  VALUES (?, ?, ?, ?, 0)";
+        $stmt = $conn->prepare($query);
+        $stmt->bind_param("isss", $user_id, $role, $message, $type);
+    }
 
     return $stmt->execute();
+}
+
+/**
+ * Check for missed project deadlines and send notifications
+ */
+function check_wp_conversion_deadlines() {
+    global $conn;
+
+    // Get current date in Sri Lanka time (UTC+5:30)
+    $timezone = new DateTimeZone('Asia/Colombo');
+    $today = new DateTime('now', $timezone);
+    $today_date = $today->format('Y-m-d');
+    $current_time = $today->format('H:i:s');
+
+    // Only run this check at/after midnight
+    if ($current_time < '00:00:05') {
+        return; // Not midnight yet
+    }
+
+    // Find projects where:
+    // 1. WP conversion deadline is today or in the past
+    // 2. Current status is still 'wp_conversion'
+    // 3. Not already marked as missed
+    $query = "SELECT p.*, u.email as webmaster_email, u.username as webmaster_name
+              FROM projects p
+              LEFT JOIN users u ON p.webmaster_id = u.id
+              WHERE p.wp_conversion_deadline < ?
+              AND p.current_status = 'wp_conversion'
+              AND p.id NOT IN (
+                  SELECT project_id FROM missed_deadlines
+                  WHERE deadline_type = 'wp_conversion'
+              )";
+
+    $stmt = $conn->prepare($query);
+    $stmt->bind_param("s", $today_date);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    while ($project = $result->fetch_assoc()) {
+        // Record this missed deadline
+        record_missed_deadline($project['id'], 'wp_conversion', $project['wp_conversion_deadline']);
+
+        // Send notification to admin users
+        send_admin_notifications($project);
+
+        // Send notification to the assigned webmaster
+        if ($project['webmaster_id']) {
+            send_webmaster_notification($project);
+        }
+    }
+}
+
+/**
+ * Record a missed deadline in the database
+ */
+function record_missed_deadline($project_id, $deadline_type, $original_deadline) {
+    global $conn;
+
+    $query = "INSERT INTO missed_deadlines
+              (project_id, deadline_type, original_deadline, recorded_at)
+              VALUES (?, ?, ?, NOW())";
+
+    $stmt = $conn->prepare($query);
+    $stmt->bind_param("iss", $project_id, $deadline_type, $original_deadline);
+    $stmt->execute();
+}
+
+/**
+ * Send notifications to all admin users
+ */
+function send_admin_notifications($project) {
+    global $conn;
+
+    // Get all admin users
+    $query = "SELECT id FROM users WHERE role = 'admin'";
+    $result = $conn->query($query);
+
+    while ($admin = $result->fetch_assoc()) {
+        $message = "WP conversion deadline missed for project '{$project['name']}'. The deadline was {$project['wp_conversion_deadline']}.";
+
+        // Use addNotification function if available
+        if (function_exists('addNotification')) {
+            addNotification($message, 'warning', $admin['id']);
+        } else {
+            $insert_query = "INSERT INTO notifications
+                           (user_id, message, type, is_read)
+                           VALUES (?, ?, 'warning', 0)";
+
+            $stmt = $conn->prepare($insert_query);
+            $stmt->bind_param("is", $admin['id'], $message);
+            $stmt->execute();
+        }
+    }
+}
+
+/**
+ * Send notification to the webmaster assigned to the project
+ */
+function send_webmaster_notification($project) {
+    global $conn;
+
+    $message = "You have missed the WP conversion deadline for project '{$project['name']}'. " .
+               "The deadline was {$project['wp_conversion_deadline']}. " .
+               "Please provide a reason and request an extension if needed.";
+
+    // Use addNotification function if available
+    if (function_exists('addNotification')) {
+        addNotification($message, 'warning', $project['webmaster_id']);
+    } else {
+        $insert_query = "INSERT INTO notifications
+                       (user_id, message, type, is_read)
+                       VALUES (?, ?, 'warning', 0)";
+
+        $stmt = $conn->prepare($insert_query);
+        $stmt->bind_param("is", $project['webmaster_id'], $message);
+        $stmt->execute();
+    }
 }
