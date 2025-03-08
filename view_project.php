@@ -28,6 +28,61 @@ if (!$project) {
     exit();
 }
 
+// Add this code right after getting the project details (around line 100-110)
+
+// Get current status and prepare status flags that will be used later
+$statuses = !empty($project['current_status']) ? explode(',', $project['current_status']) : [];
+
+// Get project status history to check if wp_conversion_qa was ever reached
+$status_history_query = "SELECT status FROM project_status_history
+                        WHERE project_id = ? AND status = 'wp_conversion_qa'
+                        LIMIT 1";
+$stmt = $conn->prepare($status_history_query);
+$stmt->bind_param("i", $project_id);
+$stmt->execute();
+$wp_qa_history = $stmt->get_result();
+
+// Check if project has reached WP conversion QA status now OR in the past
+$has_wp_qa_status = in_array('wp_conversion_qa', $statuses) || $wp_qa_history->num_rows > 0;
+
+// Check for any status beyond WP conversion (page_creation or golive)
+$has_later_status = in_array('page_creation_qa', $statuses) || in_array('golive_qa', $statuses);
+
+// Get WP conversion deadline info
+$wp_deadline = !empty($project['wp_conversion_deadline']) ? $project['wp_conversion_deadline'] : '';
+$wp_original_deadline = $wp_deadline; // Default to the same as current deadline
+$wp_deadline_display = '';
+$has_pending_wp_extension = false;
+$is_extended = false;
+
+// Check if there's an extension request
+$extension_query = "SELECT * FROM deadline_extension_requests
+                    WHERE project_id = ? AND deadline_type = 'wp_conversion'
+                    ORDER BY created_at DESC LIMIT 1";
+$stmt = $conn->prepare($extension_query);
+$stmt->bind_param("i", $project_id);
+$stmt->execute();
+$extension_result = $stmt->get_result();
+
+if ($extension_result->num_rows > 0) {
+    $extension = $extension_result->fetch_assoc();
+
+    // Save the original deadline before any extensions
+    $wp_original_deadline = $extension['original_deadline'];
+
+    // If extension is approved, use the new deadline
+    if ($extension['status'] === 'approved') {
+        $wp_deadline = $extension['requested_deadline'];
+        $wp_deadline_display = ' <span class="badge bg-info">Extended</span>';
+        $is_extended = true;
+    }
+    // If extension is pending, show pending badge
+    elseif ($extension['status'] === 'pending') {
+        $has_pending_wp_extension = true;
+        $wp_deadline_display = ' <span class="badge bg-warning">Extension Pending</span>';
+    }
+}
+
 // Now that we have $project, we can check for missed deadlines
 if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id']) {
     // Check for any missed deadlines that need reasons (reason IS NULL is critical here)
@@ -315,165 +370,160 @@ require_once 'includes/header.php'
                     <div class="col-md-6">
                         <strong>WP Conversion Deadline:</strong>
                         <?php
-                        // Check if there's an approved extension
-                        $wp_extension_query = "SELECT original_deadline, requested_deadline, status
-                                              FROM deadline_extension_requests
-                                              WHERE project_id = ? AND deadline_type = 'wp_conversion'
-                                              ORDER BY created_at DESC LIMIT 1";
-                        $stmt = $conn->prepare($wp_extension_query);
-                        $stmt->bind_param("i", $project_id);
-                        $stmt->execute();
-                        $wp_extension = $stmt->get_result()->fetch_assoc();
+// Replace lines 407-573 with this code (WP Conversion deadline display section)
 
-                        $wp_deadline_display = '';
-                        $has_pending_wp_extension = false;
-                        $wp_original_deadline = !empty($project['wp_conversion_deadline']) ? $project['wp_conversion_deadline'] : '';
-                        $wp_deadline = $wp_original_deadline;
-                        $is_extended = false; // Define the variable here so it's available throughout
+// WP Conversion deadline display
+if (!empty($wp_deadline)) {
+    $wp_deadline_obj = new DateTime($wp_deadline);
+    // Set to end of day to consider full deadline day
+    $wp_deadline_obj->setTime(23, 59, 59);
 
-                        // If there's an approved extension, use the new deadline
-                        if ($wp_extension && $wp_extension['status'] === 'approved') {
-                            $wp_deadline = $wp_extension['requested_deadline'];
-                            $wp_original_deadline = $wp_extension['original_deadline'];
-                            $wp_deadline_display = ' <span class="badge bg-info">Extended</span>';
-                            $is_extended = true; // Set to true if there's an approved extension
-                        } elseif ($wp_extension && $wp_extension['status'] === 'pending') {
-                            $has_pending_wp_extension = true;
-                            $wp_deadline_display = ' <span class="badge bg-warning">Extension Pending</span>';
-                        }
+    $today = new DateTime();
+    $interval = $today->diff($wp_deadline_obj);
+    $days_remaining = $interval->days;
 
-                        // Check if status includes wp_conversion_qa or any later stage
-                        $statuses = !empty($project['current_status']) ? explode(',', $project['current_status']) : [];
-                        $has_wp_qa_status = in_array('wp_conversion_qa', $statuses);
-                        $has_later_status = in_array('page_creation_qa', $statuses) || in_array('golive_qa', $statuses);
+    $using_extended_deadline = false;
+    if ($wp_original_deadline && $wp_deadline != $wp_original_deadline) {
+        $wp_original_deadline_obj = new DateTime($wp_original_deadline);
+        $wp_original_deadline_obj->setTime(23, 59, 59);
+        $using_extended_deadline = true;
+    }
 
-                        // Get when project moved to wp_conversion_qa status, if available
-                        $wp_qa_date = null;
-                        if ($has_wp_qa_status || $has_later_status) {
-                            $status_query = "SELECT created_at
-                                            FROM project_status_history
-                                            WHERE project_id = ? AND status = 'wp_conversion_qa'
-                                            ORDER BY created_at ASC LIMIT 1";
-                            $stmt->bind_param("i", $project_id);
-                            $stmt->execute();
-                            $status_result = $stmt->get_result();
-                            if ($status_result->num_rows > 0) {
-                                $row = $status_result->fetch_assoc();
-                                if (!empty($row['created_at'])) { // Add this check to avoid null
-                                    $wp_qa_date = new DateTime($row['created_at']);
-                                }
-                            }
-                        }
+    // Always display the date
+    echo date('F j, Y', strtotime($wp_deadline));
 
-                        // Count how many times the deadline was missed/extended
-                        $extension_count_query = "SELECT COUNT(*) as extension_count FROM deadline_extension_requests
-                                                WHERE project_id = ? AND deadline_type = 'wp_conversion'
-                                                AND status = 'approved'";
-                        $stmt->bind_param("i", $project_id);
-                        $stmt->execute();
-                        $extension_result = $stmt->get_result();
-                        // Fix the undefined array key error by using a different field name and proper checking
-                        $extension_count = 0; // Default value
-                        if ($extension_result && $extension_result->num_rows > 0) {
-                            $count_row = $extension_result->fetch_assoc();
-                            $extension_count = isset($count_row['extension_count']) ? $count_row['extension_count'] : 0;
-                        }
+    // CRITICAL FIX: Check if wp_conversion_qa is in current status OR in history
+    $has_achieved_wp_qa = false;
 
-                        // Determine deadline met status if we have a deadline and status change date
-                        $deadline_met_status = '';
-                        if (!empty($wp_deadline) && ($has_wp_qa_status || $has_later_status) && $wp_qa_date) {
-                            $wp_deadline_obj = new DateTime($wp_deadline);
-                            $wp_original_deadline_obj = !empty($wp_original_deadline) ? new DateTime($wp_original_deadline) : null;
+    // First check current status for wp_conversion_qa
+    if (in_array('wp_conversion_qa', $statuses)) {
+        $has_achieved_wp_qa = true;
+    }
 
-                            // Check if using original or extended deadline
-                            $using_extended_deadline = ($extension_count > 0 && $wp_original_deadline !== $wp_deadline);
+    // Then check for page_creation or golive statuses as these come AFTER wp_conversion_qa
+    if (!$has_achieved_wp_qa && (in_array('page_creation', $statuses) || in_array('page_creation_qa', $statuses) ||
+        in_array('golive', $statuses) || in_array('golive_qa', $statuses))) {
+        $has_achieved_wp_qa = true;
+    }
 
-                            // Always show "Deadline Missed" if the original deadline was missed
-                            if ($using_extended_deadline && $wp_original_deadline_obj && $wp_qa_date > $wp_original_deadline_obj) {
-                                // Original deadline was missed, regardless of whether extended deadline was met
-                                $missed_text = "Deadline Missed";
-                                if ($extension_count > 0) {
-                                    $missed_text .= " ({$extension_count}x)"; // Show count of extensions
-                                }
-                                $deadline_met_status = '<span class="badge bg-danger ms-2">' . $missed_text . '</span>';
-                            } else if ($wp_qa_date <= $wp_deadline_obj) {
-                                // Met original deadline (no extensions or extensions weren't needed)
-                                $deadline_met_status = '<span class="badge bg-success ms-2">Deadline Achieved</span>';
-                            } else {
-                                // Missed even the extended deadline
-                                $missed_text = "Deadline Missed";
-                                if ($extension_count > 0) {
-                                    $missed_text .= " ({$extension_count}x)";
-                                }
-                                $deadline_met_status = '<span class="badge bg-danger ms-2">' . $missed_text . '</span>';
-                            }
-                        }
+    // If still not found, check the project history table
+    if (!$has_achieved_wp_qa) {
+        $history_query = "SELECT 1 FROM project_status_history
+                         WHERE project_id = ? AND
+                         (status = 'wp_conversion_qa' OR status = 'page_creation' OR
+                         status = 'page_creation_qa' OR status = 'golive' OR status = 'golive_qa')
+                         LIMIT 1";
+        $stmt = $conn->prepare($history_query);
+        $stmt->bind_param("i", $project_id);
+        $stmt->execute();
+        $has_ever_reached_wp_qa = ($stmt->get_result()->num_rows > 0);
 
-                        // Revert to original deadline display logic (around lines 380-450)
-                        if (!empty($wp_deadline)) {
-                            $wp_deadline_obj = new DateTime($wp_deadline);
-                            $today = new DateTime();
-                            $interval = $today->diff($wp_deadline_obj);
-                            $days_remaining = $interval->days;
+        if ($has_ever_reached_wp_qa) {
+            $has_achieved_wp_qa = true;
+        }
+    }
 
-                            // Always display the date
-                            echo date('F j, Y', strtotime($wp_deadline));
+    // Add debug logging to see if we're detecting wp_qa correctly
+    error_log("Project #{$project_id} has_achieved_wp_qa: " . ($has_achieved_wp_qa ? "true" : "false"));
 
-                            // If deadline was extended, always show the Deadline Missed badge with count
-                            if ($is_extended) {
-                                $missed_text = "Deadline Missed";
-                                if ($extension_count > 0) {
-                                    $missed_text .= " ({$extension_count})";
-                                }
-                                echo ' <span class="badge bg-danger ms-2">' . $missed_text . '</span>';
-                            } else {
-                                // Using original deadline - show status based on project stage
-                                if ($has_wp_qa_status || $has_later_status) {
-                                    // Show deadline status
-                                    echo $deadline_met_status;
-                                } else {
-                                    // Not yet at WP QA stage
-                                    if (!$interval->invert) {
-                                        // Future date - deadline has not passed yet
-                                        $days_text = $days_remaining . ' days remaining';
-                                        $badge_class = $days_remaining <= 3 ? 'bg-warning' : 'bg-info';
-                                        echo ' <span class="badge ' . $badge_class . '">' . $days_text . '</span>';
-                                    } else {
-                                        // Past date - deadline has passed but not in WP QA status
-                                        echo ' <span class="badge bg-danger ms-2">Deadline Missed</span>';
+    // Get the achievement date if wp_qa was achieved
+    $wp_qa_date = null;
+    if ($has_achieved_wp_qa) {
+        $status_query = "SELECT created_at FROM project_status_history
+                        WHERE project_id = ? AND status = 'wp_conversion_qa'
+                        ORDER BY created_at ASC LIMIT 1";
+        $stmt = $conn->prepare($status_query);
+        $stmt->bind_param("i", $project_id);
+        $stmt->execute();
+        $status_result = $stmt->get_result();
+        if ($status_result && $status_result->num_rows > 0) {
+            $row = $status_result->fetch_assoc();
+            if (!empty($row['created_at'])) {
+                $wp_qa_date = new DateTime($row['created_at']);
+            }
+        }
+    }
 
-                                        // If the deadline is missed, show the extension button
-                                        if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id'] && !$has_pending_wp_extension) {
-                                            echo ' <button type="button" class="btn btn-sm btn-outline-primary"
-                                                    data-bs-toggle="modal" data-bs-target="#wpExtensionModal">
-                                                    Request Extension
-                                                  </button>';
-                                        }
-                                    }
-                                }
-                            }
+    // Display the appropriate badge based on wp_qa achievement
+    if ($has_achieved_wp_qa) {
+        if ($wp_qa_date) {
+            // If deadline was extended but original deadline was missed
+            if ($using_extended_deadline && $wp_original_deadline_obj && $wp_qa_date > $wp_original_deadline_obj) {
+                $missed_text = "Deadline Missed";
+                if ($extension_count > 0) {
+                    $missed_text .= " ({$extension_count}x)";
+                }
+                echo ' <span class="badge bg-danger ms-2">' . $missed_text . '</span>';
+            }
+            // If they met the current deadline (original or extended)
+            elseif ($wp_qa_date <= $wp_deadline_obj) {
+                echo ' <span class="badge bg-success ms-2">Deadline Achieved</span>';
+            }
+            // If they missed even the extended deadline
+            else {
+                $missed_text = "Deadline Missed";
+                if ($extension_count > 0) {
+                    $missed_text .= " ({$extension_count}x)";
+                }
+                echo ' <span class="badge bg-danger ms-2">' . $missed_text . '</span>';
+            }
+        } else {
+            // No date found but we know they reached WP QA status
+            // Consider it achieved if deadline is still in future
+            if ($today <= $wp_deadline_obj) {
+                echo ' <span class="badge bg-success ms-2">Deadline Achieved</span>';
+            } else {
+                $missed_text = "Deadline Missed";
+                if ($extension_count > 0) {
+                    $missed_text .= " ({$extension_count}x)";
+                }
+                echo ' <span class="badge bg-danger ms-2">' . $missed_text . '</span>';
+            }
+        }
+    }
+    // Project has never reached wp_conversion_qa status
+    else {
+        // If deadline was extended, always show the deadline missed badge
+        if ($is_extended) {
+            $missed_text = "Deadline Missed";
+            if ($extension_count > 0) {
+                $missed_text .= " ({$extension_count}x)";
+            }
+            echo ' <span class="badge bg-danger ms-2">' . $missed_text . '</span>';
+        }
+        // If using original deadline - show days remaining or missed
+        else {
+            if (!$interval->invert) {
+                // Future date - deadline has not passed yet
+                $days_text = $days_remaining . ' days remaining';
+                $badge_class = $days_remaining <= 3 ? 'bg-warning' : 'bg-info';
+                echo ' <span class="badge ' . $badge_class . '">' . $days_text . '</span>';
+            } else {
+                // Past date - deadline has passed but not in WP QA status
+                echo ' <span class="badge bg-danger ms-2">Deadline Missed</span>';
 
-                            // Always show extension badge if applicable
-                            echo $wp_deadline_display;
+                // If the deadline is missed, show the extension button
+                if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id'] && !$has_pending_wp_extension) {
+                    echo ' <button type="button" class="btn btn-sm btn-outline-primary"
+                            data-bs-toggle="modal" data-bs-target="#wpExtensionModal">
+                            Request Extension
+                          </button>';
+                }
+            }
+        }
+    }
 
-                            // Show original deadline if extended
-                            if ($is_extended) {
-                                echo '<br><small class="text-muted">Original: ' . date('F j, Y', strtotime($wp_original_deadline)) . '</small>';
+    // Always show extension badge if applicable
+    echo $wp_deadline_display;
 
-                                // If extended deadline is also missed, show extension request button
-                                if ($interval->invert && !$has_wp_qa_status && !$has_later_status) {
-                                    if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id'] && !$has_pending_wp_extension) {
-                                        echo ' <button type="button" class="btn btn-sm btn-outline-primary"
-                                                data-bs-toggle="modal" data-bs-target="#wpExtensionModal">
-                                                Request Extension
-                                              </button>';
-                                    }
-                                }
-                            }
-                        } else {
-                            echo '<span class="text-muted">Not set</span>';
-                        }
-                        ?>
+    // Show original deadline if extended
+    if ($is_extended) {
+        echo '<br><small class="text-muted">Original: ' . date('F j, Y', strtotime($wp_original_deadline)) . '</small>';
+    }
+} else {
+    echo '<span class="text-muted">Not set</span>';
+}
+?>
                     </div>
                     <div class="col-md-6">
                         <strong>Project Deadline:</strong>
