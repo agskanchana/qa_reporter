@@ -1,12 +1,13 @@
 <?php
 require_once 'includes/config.php';
+require_once 'includes/functions.php'; // Make sure to include functions.php
 $user_role = getUserRole();
 if (!isLoggedIn() || getUserRole() !== 'admin') {
     header("Location: login.php");
     exit();
 }
 
-// Get all extension requests - only for WP conversion
+// Get all extension requests - for both WP conversion and project deadlines
 $query = "SELECT r.*, p.name as project_name, u.username as requested_by_name,
           rev.username as reviewed_by_name,
           r.reviewed_at as review_timestamp
@@ -14,11 +15,10 @@ $query = "SELECT r.*, p.name as project_name, u.username as requested_by_name,
           JOIN projects p ON r.project_id = p.id
           JOIN users u ON r.requested_by = u.id
           LEFT JOIN users rev ON r.reviewed_by = rev.id
-          WHERE r.deadline_type = 'wp_conversion'
           ORDER BY r.created_at DESC";
 $result = $conn->query($query);
 
-// Count statuses for tab management
+// Initialize counters properly
 $pending_count = 0;
 $approved_count = 0;
 $denied_count = 0;
@@ -48,7 +48,7 @@ require_once 'includes/header.php';
 ?>
 
 <div class="container mt-4">
-    <h2>WP Conversion Deadline Extension Requests</h2>
+    <h2>Deadline Extension Requests</h2>
 
     <?php if (isset($_SESSION['success'])): ?>
         <div class="alert alert-success"><?php echo $_SESSION['success']; unset($_SESSION['success']); ?></div>
@@ -327,3 +327,96 @@ document.addEventListener('DOMContentLoaded', function() {
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
+<?php
+require_once 'includes/config.php';
+
+// Check if user is logged in and is an admin
+if (!isLoggedIn() || getUserRole() !== 'admin') {
+    header("Location: login.php");
+    exit();
+}
+
+$error = '';
+$success = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    $extension_id = isset($_POST['extension_id']) ? (int)$_POST['extension_id'] : 0;
+    $action = $_POST['action'];
+
+    if (empty($extension_id)) {
+        $error = "Invalid extension request.";
+    } else {
+        // Get extension details first
+        $query = "SELECT * FROM deadline_extension_requests WHERE id = ?";
+        $stmt = $conn->prepare($query);
+        $stmt->bind_param("i", $extension_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        if ($result->num_rows === 0) {
+            $error = "Extension request not found.";
+        } else {
+            $extension = $result->fetch_assoc();
+            $project_id = $extension['project_id'];
+            $deadline_type = $extension['deadline_type'];
+            $requested_deadline = $extension['requested_deadline'];
+
+            if ($action === 'approve') {
+                // Approve the extension
+                $update_query = "UPDATE deadline_extension_requests
+                                SET status = 'approved', approved_by = ?, approved_at = NOW()
+                                WHERE id = ?";
+                $stmt = $conn->prepare($update_query);
+                $stmt->bind_param("ii", $_SESSION['user_id'], $extension_id);
+
+                if ($stmt->execute()) {
+                    // Update the project deadline
+                    $deadline_field = $deadline_type === 'project' ? 'project_deadline' : 'wp_conversion_deadline';
+                    $update_project_query = "UPDATE projects SET $deadline_field = ? WHERE id = ?";
+                    $stmt = $conn->prepare($update_project_query);
+                    $stmt->bind_param("si", $requested_deadline, $project_id);
+
+                    if ($stmt->execute()) {
+                        $success = "Extension request approved successfully.";
+                    } else {
+                        $error = "Error updating project deadline: " . $conn->error;
+                    }
+                } else {
+                    $error = "Error approving extension: " . $conn->error;
+                }
+            } elseif ($action === 'reject') {
+                // Reject the extension
+                $update_query = "UPDATE deadline_extension_requests
+                                SET status = 'rejected', approved_by = ?, approved_at = NOW()
+                                WHERE id = ?";
+                $stmt = $conn->prepare($update_query);
+                $stmt->bind_param("ii", $_SESSION['user_id'], $extension_id);
+
+                if ($stmt->execute()) {
+                    $success = "Extension request rejected.";
+                } else {
+                    $error = "Error rejecting extension: " . $conn->error;
+                }
+            } else {
+                $error = "Invalid action.";
+            }
+
+            // Redirect back to pending extensions page
+            if ($success) {
+                header("Location: pending_extensions.php?success=" . urlencode($success));
+                exit();
+            }
+        }
+    }
+}
+
+// If there was an error, redirect back with error message
+if ($error) {
+    header("Location: pending_extensions.php?error=" . urlencode($error));
+    exit();
+}
+
+// Shouldn't reach here, but just in case
+header("Location: dashboard.php");
+exit();
+?>

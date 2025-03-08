@@ -59,6 +59,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $ticket_link = $conn->real_escape_string($_POST['ticket_link']);
                 $test_site_link = isset($_POST['test_site_link']) ? $conn->real_escape_string($_POST['test_site_link']) : '';
                 $live_site_link = isset($_POST['live_site_link']) ? $conn->real_escape_string($_POST['live_site_link']) : '';
+                $admin_notes = $conn->real_escape_string($_POST['admin_notes']);
+                $webmaster_notes = $conn->real_escape_string($_POST['webmaster_notes']);
 
                 // Check if project name already exists
                 $check_query = "SELECT COUNT(*) as count FROM projects WHERE name = ?";
@@ -78,11 +80,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 try {
                     // Insert project with new fields
                     $query = "INSERT INTO projects (name, webmaster_id, current_status, project_deadline,
-                              wp_conversion_deadline, gp_link, ticket_link, test_site_link, live_site_link)
-                              VALUES (?, ?, 'wp_conversion', ?, ?, ?, ?, ?, ?)";
+                              wp_conversion_deadline, gp_link, ticket_link, test_site_link, live_site_link,
+                              admin_notes, webmaster_notes)
+                              VALUES (?, ?, 'wp_conversion', ?, ?, ?, ?, ?, ?, ?, ?)";
                     $stmt = $conn->prepare($query);
-                    $stmt->bind_param("sissssss", $project_name, $webmaster_id, $project_deadline,
-                                     $wp_conversion_deadline, $gp_link, $ticket_link, $test_site_link, $live_site_link);
+                    $stmt->bind_param("sissssssss", $project_name, $webmaster_id, $project_deadline,
+                                     $wp_conversion_deadline, $gp_link, $ticket_link, $test_site_link,
+                                     $live_site_link, $admin_notes, $webmaster_notes);
                     $stmt->execute();
 
                     $project_id = $conn->insert_id;
@@ -116,6 +120,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $ticket_link = $conn->real_escape_string($_POST['ticket_link']);
                 $test_site_link = isset($_POST['test_site_link']) ? $conn->real_escape_string($_POST['test_site_link']) : '';
                 $live_site_link = isset($_POST['live_site_link']) ? $conn->real_escape_string($_POST['live_site_link']) : '';
+                $admin_notes = $conn->real_escape_string($_POST['admin_notes']);
+                $webmaster_notes = $conn->real_escape_string($_POST['webmaster_notes']);
 
                 $query = "UPDATE projects SET
                           name = ?,
@@ -125,17 +131,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                           gp_link = ?,
                           ticket_link = ?,
                           test_site_link = ?,
-                          live_site_link = ?
+                          live_site_link = ?,
+                          admin_notes = ?,
+                          webmaster_notes = ?
                           WHERE id = ?";
                 $stmt = $conn->prepare($query);
-                $stmt->bind_param("sissssssi", $project_name, $webmaster_id, $project_deadline,
+                $stmt->bind_param("sissssssssi", $project_name, $webmaster_id, $project_deadline,
                                  $wp_conversion_deadline, $gp_link, $ticket_link,
-                                 $test_site_link, $live_site_link, $project_id);
+                                 $test_site_link, $live_site_link, $admin_notes,
+                                 $webmaster_notes, $project_id);
 
                 if ($stmt->execute()) {
-                    $success = "Project updated successfully!";
+                    $_SESSION['success'] = "Project updated successfully!";
                 } else {
-                    $error = "Error updating project.";
+                    $_SESSION['error'] = "Error updating project: " . $stmt->error;
                 }
                 break;
 
@@ -276,6 +285,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         </div>
                     </div>
 
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="admin_notes" class="form-label">Notes by Admin</label>
+                            <textarea class="form-control" id="admin_notes" name="admin_notes" rows="3"></textarea>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="webmaster_notes" class="form-label">Notes by Webmaster</label>
+                            <textarea class="form-control" id="webmaster_notes" name="webmaster_notes" rows="3"
+                                     <?php echo $user_role !== 'admin' ? 'readonly' : ''; ?>></textarea>
+                        </div>
+                    </div>
+
                     <button type="submit" class="btn btn-primary">Create Project</button>
                 </form>
             </div>
@@ -340,17 +362,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 <nav aria-label="Project pagination">
                     <ul class="pagination justify-content-center">
                         <li class="page-item <?php echo $page <= 1 ? 'disabled' : ''; ?>">
-                            <a class="page-link" href="?page=<?php echo $page - 1; ?>">Previous</a>
+                            <a class="page-link" href="<?php echo url('projects.php'); ?>?page=<?php echo $page - 1; ?>">Previous</a>
                         </li>
 
                         <?php for ($i = 1; $i <= $total_pages; $i++): ?>
                         <li class="page-item <?php echo $page == $i ? 'active' : ''; ?>">
-                            <a class="page-link" href="?page=<?php echo $i; ?>"><?php echo $i; ?></a>
+                            <a class="page-link" href="<?php echo url('projects.php'); ?>?page=<?php echo $i; ?>"><?php echo $i; ?></a>
                         </li>
                         <?php endfor; ?>
 
                         <li class="page-item <?php echo $page >= $total_pages ? 'disabled' : ''; ?>">
-                            <a class="page-link" href="?page=<?php echo $page + 1; ?>">Next</a>
+                            <a class="page-link" href="<?php echo url('projects.php'); ?>?page=<?php echo $page + 1; ?>">Next</a>
                         </li>
                     </ul>
                 </nav>
@@ -429,6 +451,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                 <input type="url" class="form-control" id="edit_live_site_link" name="live_site_link">
                             </div>
                         </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="edit_admin_notes" class="form-label">Notes by Admin</label>
+                                <textarea class="form-control" id="edit_admin_notes" name="admin_notes" rows="3"></textarea>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="edit_webmaster_notes" class="form-label">Notes by Webmaster</label>
+                                <textarea class="form-control" id="edit_webmaster_notes" name="webmaster_notes" rows="3"
+                                         <?php echo $user_role !== 'admin' ? 'readonly' : ''; ?>></textarea>
+                            </div>
+                        </div>
+
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -464,6 +500,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
         if (project.live_site_link) {
             document.getElementById('edit_live_site_link').value = project.live_site_link;
+        }
+
+        // Set the notes fields
+        if (project.admin_notes) {
+            document.getElementById('edit_admin_notes').value = project.admin_notes;
+        }
+        if (project.webmaster_notes) {
+            document.getElementById('edit_webmaster_notes').value = project.webmaster_notes;
         }
 
         new bootstrap.Modal(document.getElementById('editProjectModal')).show();

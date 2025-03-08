@@ -17,7 +17,6 @@ if ($user_role !== 'webmaster') {
     exit;
 }
 
-$project_id = isset($_GET['project_id']) ? (int)$_GET['project_id'] : 0;
 $deadline_id = isset($_GET['deadline_id']) ? (int)$_GET['deadline_id'] : 0;
 $success = '';
 $error = '';
@@ -40,20 +39,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_reason'])) {
     $stmt->bind_param("sii", $reason, $user_id, $deadline_id);
 
     if ($stmt->execute()) {
-        $success = "Reason submitted successfully.";
         $reason_submitted = true;
+        $success = "Reason submitted successfully.";
 
-        // Get the project details for the extension form
-        $query = "SELECT m.*, p.name as project_name, p.webmaster_id, p.id as project_id,
-                  p.wp_conversion_deadline, p.project_deadline
-                  FROM missed_deadlines m
-                  JOIN projects p ON m.project_id = p.id
-                  WHERE m.id = ?";
+        // Get the deadline information for the extension form
+        $query = "SELECT m.*, p.name as project_name, p.id as project_id,
+                 p.webmaster_id, p.project_deadline, p.wp_conversion_deadline
+                 FROM missed_deadlines m
+                 JOIN projects p ON m.project_id = p.id
+                 WHERE m.id = ? AND p.webmaster_id = ?";
 
         $stmt = $conn->prepare($query);
-        $stmt->bind_param("i", $deadline_id);
+        $stmt->bind_param("ii", $deadline_id, $user_id);
         $stmt->execute();
-        $deadline = $stmt->get_result()->fetch_assoc();
+        $result = $stmt->get_result();
+
+        if ($result->num_rows > 0) {
+            $deadline = $result->fetch_assoc();
+        } else {
+            header("Location: dashboard.php");
+            exit;
+        }
     } else {
         $error = "Error submitting reason: " . $conn->error;
     }
@@ -61,10 +67,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_reason'])) {
 
 // Handle extension request submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_extension'])) {
-    $project_id = (int)$_POST['project_id'];
-    $deadline_type = $_POST['deadline_type'];
-    $requested_deadline = $_POST['requested_deadline'];
-    $extension_reason = trim($_POST['extension_reason']);
+    $project_id = isset($_POST['project_id']) ? (int)$_POST['project_id'] : 0;
+    $deadline_type = isset($_POST['deadline_type']) ? $_POST['deadline_type'] : '';
+    $requested_deadline = isset($_POST['requested_deadline']) ? $_POST['requested_deadline'] : '';
+    $extension_reason = isset($_POST['extension_reason']) ? trim($_POST['extension_reason']) : '';
 
     // Ensure this project belongs to the current webmaster
     $check_query = "SELECT * FROM projects WHERE id = ? AND webmaster_id = ?";
@@ -74,81 +80,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_extension'])) 
     $result = $stmt->get_result();
 
     if ($result->num_rows > 0) {
+        // Get the current deadline
         $project = $result->fetch_assoc();
-        $original_deadline = $deadline_type === 'wp_conversion' ?
-                            $project['wp_conversion_deadline'] :
-                            $project['project_deadline'];
+        $current_deadline = $deadline_type === 'project' ? $project['project_deadline'] : $project['wp_conversion_deadline'];
 
-        // Create the deadline_extension_requests table if it doesn't exist
-        $check_table = $conn->query("SHOW TABLES LIKE 'deadline_extension_requests'");
-        if ($check_table->num_rows == 0) {
-            $create_table = "CREATE TABLE IF NOT EXISTS `deadline_extension_requests` (
-                `id` int NOT NULL AUTO_INCREMENT,
-                `project_id` int NOT NULL,
-                `requested_by` int NOT NULL,
-                `deadline_type` enum('wp_conversion','project') NOT NULL,
-                `original_deadline` date NOT NULL,
-                `requested_deadline` date NOT NULL,
-                `reason` text NOT NULL,
-                `status` enum('pending','approved','denied') NOT NULL DEFAULT 'pending',
-                `reviewed_by` int DEFAULT NULL,
-                `reviewed_at` datetime DEFAULT NULL,
-                `review_comment` text,
-                `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (`id`),
-                KEY `project_id` (`project_id`),
-                KEY `requested_by` (`requested_by`),
-                KEY `reviewed_by` (`reviewed_by`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci";
-            $conn->query($create_table);
-        }
-
-        // Insert extension request
+        // Add extension request
         $query = "INSERT INTO deadline_extension_requests
-                  (project_id, requested_by, deadline_type, original_deadline,
-                   requested_deadline, reason, status)
-                  VALUES (?, ?, ?, ?, ?, ?, 'pending')";
+                 (project_id, deadline_type, original_deadline, requested_deadline, reason, requested_by)
+                 VALUES (?, ?, ?, ?, ?, ?)";
 
         $stmt = $conn->prepare($query);
-        $stmt->bind_param("iissss", $project_id, $user_id, $deadline_type,
-                          $original_deadline, $requested_deadline, $extension_reason);
+        $stmt->bind_param("issssi", $project_id, $deadline_type, $current_deadline, $requested_deadline, $extension_reason, $user_id);
 
         if ($stmt->execute()) {
-            // Notify admins about the extension request
-            $request_id = $conn->insert_id;
-            $admin_query = "SELECT id FROM users WHERE role = 'admin'";
-            $admins = $conn->query($admin_query);
+            $success = "Extension request submitted successfully.";
 
-            while ($admin = $admins->fetch_assoc()) {
-                $message = "New deadline extension request for project '{$project['name']}'. " .
-                           "Deadline type: " . ucfirst(str_replace('_', ' ', $deadline_type));
-
-                $notify_query = "INSERT INTO notifications
-                               (user_id, role, message, type, is_read)
-                               VALUES (?, 'admin', ?, 'info', 0)";
-                $stmt = $conn->prepare($notify_query);
-                $stmt->bind_param("is", $admin['id'], $message);
-                $stmt->execute();
-            }
-
-            $_SESSION['success'] = "Extension request submitted successfully.";
-            header("Location: dashboard.php");
+            // Redirect back to project page after successful submission
+            header("Location: view_project.php?id=" . $project_id);
             exit;
         } else {
             $error = "Error submitting extension request: " . $conn->error;
         }
     } else {
-        $error = "Invalid project.";
+        $error = "You don't have permission to extend deadlines for this project.";
     }
+}
+
+// Handle skipping the extension request
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['skip_extension'])) {
+    $project_id = isset($_POST['project_id']) ? (int)$_POST['project_id'] : 0;
+
+    // Redirect back to project page
+    header("Location: view_project.php?id=" . $project_id);
+    exit;
 }
 
 // If not submitted reason yet, get the deadline details
 if (!$reason_submitted) {
     $query = "SELECT m.*, p.name as project_name, p.webmaster_id, p.id as project_id,
-              p.wp_conversion_deadline, p.project_deadline
-              FROM missed_deadlines m
-              JOIN projects p ON m.project_id = p.id
-              WHERE m.id = ? AND p.webmaster_id = ?";
+             p.project_deadline, p.wp_conversion_deadline, m.project_id as missed_project_id
+             FROM missed_deadlines m
+             JOIN projects p ON m.project_id = p.id
+             WHERE m.id = ? AND p.webmaster_id = ? AND (m.reason IS NULL OR m.reason = '')";
 
     $stmt = $conn->prepare($query);
     $stmt->bind_param("ii", $deadline_id, $user_id);
@@ -156,6 +129,8 @@ if (!$reason_submitted) {
     $result = $stmt->get_result();
 
     if ($result->num_rows === 0) {
+        // Either deadline doesn't exist, doesn't belong to this webmaster,
+        // or reason has already been provided - redirect to dashboard
         header("Location: dashboard.php");
         exit;
     }
@@ -176,84 +151,87 @@ if (!$reason_submitted) {
     <?php include 'includes/header.php'; ?>
 
     <div class="container mt-4">
-        <?php if ($error): ?>
-            <div class="alert alert-danger"><?php echo $error; ?></div>
-        <?php endif; ?>
-
         <?php if ($success): ?>
             <div class="alert alert-success"><?php echo $success; ?></div>
         <?php endif; ?>
 
-        <div class="row justify-content-center">
-            <div class="col-md-8">
-                <div class="card">
-                    <?php if (!$reason_submitted): ?>
-                    <!-- Step 1: Submit reason for missing deadline -->
-                    <div class="card-header bg-warning text-dark">
-                        <h4>Missed Deadline Explanation</h4>
+        <?php if ($error): ?>
+            <div class="alert alert-danger"><?php echo $error; ?></div>
+        <?php endif; ?>
+
+        <?php if (!$reason_submitted): ?>
+        <!-- Step 1: Provide reason for missing deadline -->
+        <div class="card">
+            <div class="card-header bg-warning text-dark">
+                <h4>Deadline Missed: <?php echo htmlspecialchars($deadline['project_name']); ?></h4>
+            </div>
+            <div class="card-body">
+                <p class="lead">The <?php echo $deadline['deadline_type'] === 'project' ? 'Project' : 'WP Conversion'; ?> deadline
+                (<?php echo date('F j, Y', strtotime($deadline['original_deadline'])); ?>) was missed.</p>
+                <p>Please provide an explanation for missing this deadline:</p>
+
+                <form method="POST">
+                    <input type="hidden" name="deadline_id" value="<?php echo $deadline_id; ?>">
+
+                    <div class="mb-3">
+                        <label for="reason" class="form-label">Reason for Missing Deadline</label>
+                        <textarea class="form-control" id="reason" name="reason" rows="4" required></textarea>
                     </div>
-                    <div class="card-body">
-                        <h5>Project: <?php echo htmlspecialchars($deadline['project_name']); ?></h5>
-                        <p>
-                            You have missed the
-                            <strong><?php echo ucfirst(str_replace('_', ' ', $deadline['deadline_type'])); ?></strong>
-                            deadline on <strong><?php echo $deadline['original_deadline']; ?></strong>.
-                        </p>
 
-                        <form method="POST">
-                            <input type="hidden" name="deadline_id" value="<?php echo $deadline_id; ?>">
-
-                            <div class="mb-3">
-                                <label for="reason" class="form-label">Reason for missing the deadline:</label>
-                                <textarea class="form-control" id="reason" name="reason" rows="5" required></textarea>
-                            </div>
-
-                            <div class="d-flex justify-content-end">
-                                <button type="submit" name="submit_reason" class="btn btn-primary">Submit Reason</button>
-                            </div>
-                        </form>
-                    </div>
-                    <?php else: ?>
-                    <!-- Step 2: Request deadline extension -->
-                    <div class="card-header bg-info text-white">
-                        <h4>Request Deadline Extension</h4>
-                    </div>
-                    <div class="card-body">
-                        <h5>Project: <?php echo htmlspecialchars($deadline['project_name']); ?></h5>
-                        <p>
-                            Current <?php echo ucfirst(str_replace('_', ' ', $deadline['deadline_type'])); ?> deadline:
-                            <strong>
-                                <?php echo $deadline['deadline_type'] === 'wp_conversion' ?
-                                      $deadline['wp_conversion_deadline'] :
-                                      $deadline['project_deadline']; ?>
-                            </strong>
-                        </p>
-
-                        <form method="POST">
-                            <input type="hidden" name="project_id" value="<?php echo $deadline['project_id']; ?>">
-                            <input type="hidden" name="deadline_type" value="<?php echo $deadline['deadline_type']; ?>">
-
-                            <div class="mb-3">
-                                <label for="requested_deadline" class="form-label">Requested New Deadline:</label>
-                                <input type="date" class="form-control" id="requested_deadline" name="requested_deadline"
-                                       min="<?php echo date('Y-m-d'); ?>" required>
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="extension_reason" class="form-label">Reason for Extension Request:</label>
-                                <textarea class="form-control" id="extension_reason" name="extension_reason" rows="5" required></textarea>
-                            </div>
-
-                            <div class="d-flex justify-content-between">
-                                <a href="dashboard.php" class="btn btn-outline-secondary">Cancel</a>
-                                <button type="submit" name="submit_extension" class="btn btn-primary">Submit Extension Request</button>
-                            </div>
-                        </form>
-                    </div>
-                    <?php endif; ?>
-                </div>
+                    <button type="submit" name="submit_reason" class="btn btn-primary">Submit Reason</button>
+                </form>
             </div>
         </div>
+        <?php else: ?>
+        <!-- Step 2: Request deadline extension -->
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h4>Request Deadline Extension: <?php echo htmlspecialchars($deadline['project_name']); ?></h4>
+            </div>
+            <div class="card-body">
+                <p>You've explained why the deadline was missed. Now you can request an extension or skip.</p>
+
+                <div class="d-flex justify-content-between mb-3">
+                    <!-- This is a separate form for skipping the extension request -->
+                    <form method="POST">
+                        <input type="hidden" name="project_id" value="<?php echo $deadline['project_id']; ?>">
+                        <button type="submit" name="skip_extension" class="btn btn-secondary">Skip Extension Request</button>
+                    </form>
+                </div>
+
+                <!-- This is a separate form for the extension request -->
+                <form method="POST">
+                    <input type="hidden" name="project_id" value="<?php echo $deadline['project_id']; ?>">
+                    <input type="hidden" name="deadline_type" value="<?php echo $deadline['deadline_type']; ?>">
+
+                    <div class="mb-3">
+                        <label class="form-label">Current Deadline</label>
+                        <input type="text" class="form-control" value="<?php
+                            $current_deadline = $deadline['deadline_type'] === 'project' ?
+                                $deadline['project_deadline'] : $deadline['wp_conversion_deadline'];
+                            echo date('F j, Y', strtotime($current_deadline));
+                        ?>" disabled>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="requested_deadline" class="form-label">Requested New Deadline</label>
+                        <input type="date" class="form-control" id="requested_deadline" name="requested_deadline"
+                               min="<?php echo date('Y-m-d'); ?>" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="extension_reason" class="form-label">Reason for Extension Request</label>
+                        <textarea class="form-control" id="extension_reason" name="extension_reason" rows="3" required></textarea>
+                        <div class="form-text">Explain why you need this extension and how you'll meet the new deadline.</div>
+                    </div>
+
+                    <div class="d-flex justify-content-end">
+                        <button type="submit" name="submit_extension" class="btn btn-primary">Submit Extension Request</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <?php endif; ?>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>

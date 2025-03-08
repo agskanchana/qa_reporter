@@ -38,6 +38,12 @@ if (!isLoggedIn()) {
 $user_role = getUserRole();
 $user_id = $_SESSION['user_id'];
 
+// Add this near the top of the file, after authentication checks
+// but before displaying any content
+
+// Check for missed deadlines
+require_once 'includes/check_missed_deadlines.php';
+
 // Handle QA Assignment
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($user_role, ['admin', 'qa_manager'])) {
     if (isset($_POST['assign_qa']) && isset($_POST['project_id']) && isset($_POST['qa_user_id'])) {
@@ -779,6 +785,58 @@ usort($notifications, function($a, $b) {
     </div>
 <?php endif; ?>
 
+<?php if ($user_role === 'webmaster'): ?>
+<!-- Add this to the webmaster dashboard section -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5>Missed Deadlines Requiring Action</h5>
+    </div>
+    <div class="card-body">
+        <?php
+        // Get missed deadlines for this webmaster that need reasons
+        $query = "SELECT md.id, md.deadline_type, md.original_deadline, p.name as project_name
+                  FROM missed_deadlines md
+                  JOIN projects p ON md.project_id = p.id
+                  WHERE p.webmaster_id = ? AND md.reason IS NULL
+                  ORDER BY md.recorded_at DESC";
+        $stmt = $conn->prepare($query);
+        $stmt->bind_param("i", $_SESSION['user_id']);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        if ($result->num_rows > 0) {
+            echo '<div class="table-responsive">
+                  <table class="table table-hover">
+                    <thead>
+                      <tr>
+                        <th>Project</th>
+                        <th>Deadline Type</th>
+                        <th>Original Deadline</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>';
+
+            while ($row = $result->fetch_assoc()) {
+                echo '<tr>
+                        <td>'.htmlspecialchars($row['project_name']).'</td>
+                        <td>'.ucfirst(str_replace('_', ' ', $row['deadline_type'])).'</td>
+                        <td>'.date('F j, Y', strtotime($row['original_deadline'])).'</td>
+                        <td>
+                          <a href="missed_deadline_reason.php?deadline_id='.$row['id'].'"
+                             class="btn btn-warning btn-sm">Provide Reason</a>
+                        </td>
+                      </tr>';
+            }
+
+            echo '</tbody></table></div>';
+        } else {
+            echo '<p class="text-muted">No missed deadlines requiring action.</p>';
+        }
+        ?>
+    </div>
+</div>
+<?php endif; ?>
 
 
 

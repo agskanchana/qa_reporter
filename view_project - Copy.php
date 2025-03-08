@@ -30,9 +30,32 @@ if (!$project) {
 
 // Now that we have $project, we can check for missed deadlines
 if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id']) {
+    // First, ensure we have the missed_deadlines table
+    $check_table = $conn->query("SHOW TABLES LIKE 'missed_deadlines'");
+    if ($check_table->num_rows == 0) {
+        // Create the table if it doesn't exist
+        $create_table = "CREATE TABLE IF NOT EXISTS `missed_deadlines` (
+            `id` int NOT NULL AUTO_INCREMENT,
+            `project_id` int NOT NULL,
+            `deadline_type` enum('wp_conversion','project') NOT NULL,
+            `original_deadline` date NOT NULL,
+            `reason` text DEFAULT NULL,
+            `reason_provided_by` int DEFAULT NULL,
+            `reason_provided_at` datetime DEFAULT NULL,
+            `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            KEY `project_id` (`project_id`),
+            KEY `reason_provided_by` (`reason_provided_by`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci";
+        $conn->query($create_table);
+    }
+
+    // Debug info to see what's happening
+    error_log("Checking for missed deadlines for project #$project_id, user #$_SESSION[user_id]");
+
     // Check for any missed deadlines that need reasons (reason IS NULL is critical here)
     $query = "SELECT * FROM missed_deadlines
-              WHERE project_id = ? AND (reason IS NULL OR reason = '')
+              WHERE project_id = ? AND reason IS NULL
               ORDER BY deadline_type ASC LIMIT 1";
 
     $stmt = $conn->prepare($query);
@@ -45,26 +68,9 @@ if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id
     error_log("Missed deadline check result: " . ($missed_deadline ? "Found ID: {$missed_deadline['id']}" : "None found"));
 
     // If there's a missed deadline needing a reason, redirect to provide it
-    // But first check if we've just returned from that page to avoid infinite loops
     if ($missed_deadline) {
-        // Check if we're coming back from submitting a reason
-        $session_key = 'extension_submitted_' . $project_id . '_' . $missed_deadline['deadline_type'];
-        $skipped_key = 'extension_skipped_' . $project_id . '_' . $missed_deadline['deadline_type'];
-
-        if (!isset($_SESSION[$session_key]) && !isset($_SESSION[$skipped_key])) {
-            error_log("Redirecting to missed_deadline_reason.php with deadline_id=" . $missed_deadline['id']);
-            header("Location: missed_deadline_reason.php?deadline_id=" . $missed_deadline['id']);
-            exit();
-        } else {
-            error_log("Skipping redirect because we just came from extension form");
-            // Reset these session flags after a day to allow future redirects
-            if (isset($_SESSION[$session_key]) && $_SESSION[$session_key] < time() - 86400) {
-                unset($_SESSION[$session_key]);
-            }
-            if (isset($_SESSION[$skipped_key]) && $_SESSION[$skipped_key] < time() - 86400) {
-                unset($_SESSION[$skipped_key]);
-            }
-        }
+        header("Location: missed_deadline_reason.php?deadline_id=" . $missed_deadline['id']);
+        exit();
     }
 
     // Check for new missed deadlines - need to include the function before using it
@@ -79,15 +85,9 @@ if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id
         $first_type = array_key_first($missed_deadlines);
         $deadline_id = $missed_deadlines[$first_type]['id'];
 
-        // Only redirect if we haven't just come from there
-        $session_key = 'extension_submitted_' . $project_id . '_' . $first_type;
-        $skipped_key = 'extension_skipped_' . $project_id . '_' . $first_type;
-
-        if (!isset($_SESSION[$session_key]) && !isset($_SESSION[$skipped_key])) {
-            error_log("Redirecting to missed_deadline_reason.php with deadline_id=$deadline_id");
-            header("Location: missed_deadline_reason.php?deadline_id=" . $deadline_id);
-            exit();
-        }
+        error_log("Redirecting to missed_deadline_reason.php with deadline_id=$deadline_id");
+        header("Location: missed_deadline_reason.php?deadline_id=" . $deadline_id);
+        exit();
     }
 }
 
@@ -242,25 +242,6 @@ require_once 'includes/header.php'
 ?>
 
 <div class="container mt-4">
-    <?php if (isset($_GET['success'])): ?>
-        <div class="alert alert-success alert-dismissible fade show">
-            <?php
-                if ($_GET['success'] === 'extension_requested') {
-                    echo "Extension request submitted successfully and is pending approval.";
-                } else {
-                    echo htmlspecialchars($_GET['success']);
-                }
-            ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    <?php endif; ?>
-
-    <?php if (isset($_GET['error'])): ?>
-        <div class="alert alert-danger alert-dismissible fade show">
-            <?php echo htmlspecialchars($_GET['error']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    <?php endif; ?>
     <div class="row mb-4">
         <div class="col">
             <h2><?php echo htmlspecialchars($project['name']); ?></h2>
@@ -418,24 +399,9 @@ require_once 'includes/header.php'
 
                             // Always show "Deadline Missed" if original deadline was missed, regardless of current project status or QA status
                             if ($is_extended) {
-                                // Get the extension count from approved deadline extensions
-                                $extension_count_query = "SELECT COUNT(*) as extension_count FROM deadline_extension_requests
-                                                        WHERE project_id = ? AND deadline_type = 'wp_conversion'
-                                                        AND status = 'approved'";
-                                $stmt = $conn->prepare($extension_count_query);
-                                $stmt->bind_param("i", $project_id);
-                                $stmt->execute();
-                                $extension_result = $stmt->get_result();
-                                $extension_count = 0;
-                                if ($extension_result && $extension_result->num_rows > 0) {
-                                    $count_row = $extension_result->fetch_assoc();
-                                    $extension_count = isset($count_row['extension_count']) ? (int)$count_row['extension_count'] : 0;
-                                }
-
-                                // Always show the count of times the deadline was missed
                                 $missed_text = "Deadline Missed";
                                 if ($extension_count > 0) {
-                                    $missed_text .= " ({$extension_count})";
+                                    $missed_text .= " ({$extension_count}x)";
                                 }
                                 echo ' <span class="badge bg-danger ms-2">' . $missed_text . '</span>';
                             } else {
@@ -457,14 +423,6 @@ require_once 'includes/header.php'
                                     } else {
                                         // Past date - deadline has passed but not in WP QA status
                                         echo ' <span class="badge bg-danger ms-2">Deadline Missed</span>';
-
-                                        // If the deadline is missed (even if it's an extended deadline), show the extension button
-                                        if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id'] && !$has_pending_wp_extension) {
-                                            echo ' <button type="button" class="btn btn-sm btn-outline-primary"
-                                                    data-bs-toggle="modal" data-bs-target="#wpExtensionModal">
-                                                    Request Extension
-                                                  </button>';
-                                        }
                                     }
                                 }
                             }
@@ -475,32 +433,6 @@ require_once 'includes/header.php'
                             // Show original deadline if extended
                             if ($is_extended) {
                                 echo '<br><small class="text-muted">Original: ' . date('F j, Y', strtotime($wp_original_deadline)) . '</small>';
-                            }
-
-                            // Show extension button for webmasters - but only if not in QA status yet
-                            // For original deadlines, only show if approaching/passed; for extended deadlines, allow requesting again if missed
-                            if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id']
-                                && !$has_pending_wp_extension && !$has_wp_qa_status && !$has_later_status) {
-                                $show_extension_button = false;
-
-                                if ($is_extended) {
-                                    // For extended deadlines, show button if the deadline is missed
-                                    if ($interval->invert) {
-                                        $show_extension_button = true;
-                                    }
-                                } else {
-                                    // For original deadlines, show button if approaching (7 days or less) or passed
-                                    if ($interval->invert || $days_remaining <= 7) {
-                                        $show_extension_button = true;
-                                    }
-                                }
-
-                                if ($show_extension_button) {
-                                    echo ' <button type="button" class="btn btn-sm btn-outline-primary"
-                                            data-bs-toggle="modal" data-bs-target="#wpExtensionModal">
-                                            Request Extension
-                                          </button>';
-                                }
                             }
                         } else {
                             echo '<span class="text-muted">Not set</span>';
