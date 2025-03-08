@@ -410,8 +410,12 @@ function send_webmaster_notification($project) {
 function checkMissedDeadlines($project_id, $user_id) {
     global $conn;
 
-    // Get project data
-    $query = "SELECT p.*
+    // Get project data with current deadline information
+    $query = "SELECT p.*,
+              (SELECT COUNT(*) FROM missed_deadlines
+               WHERE project_id = p.id AND deadline_type = 'wp_conversion') as wp_missed_count,
+              (SELECT COUNT(*) FROM missed_deadlines
+               WHERE project_id = p.id AND deadline_type = 'project') as project_missed_count
               FROM projects p
               WHERE p.id = ? AND p.webmaster_id = ?";
 
@@ -427,23 +431,42 @@ function checkMissedDeadlines($project_id, $user_id) {
     $today = new DateTime();
     $missed_deadlines = [];
 
-    // Check WP conversion deadline
+    // Check WP conversion deadline - whether original or extended
     if (!empty($project['wp_conversion_deadline'])) {
-        $wp_deadline = new DateTime($project['wp_conversion_deadline']);
+        // First check if there's an approved extension that changes the deadline
+        $extension_query = "SELECT requested_deadline
+                            FROM deadline_extension_requests
+                            WHERE project_id = ? AND deadline_type = 'wp_conversion'
+                            AND status = 'approved'
+                            ORDER BY created_at DESC LIMIT 1";
+        $stmt = $conn->prepare($extension_query);
+        $stmt->bind_param("i", $project_id);
+        $stmt->execute();
+        $extension_result = $stmt->get_result();
+
+        // Use the extended deadline if available, otherwise use original
+        $wp_deadline = $project['wp_conversion_deadline'];
+        if ($extension_result->num_rows > 0) {
+            $wp_deadline = $extension_result->fetch_assoc()['requested_deadline'];
+        }
+
+        // Check if the current deadline (original or extended) is missed
+        $wp_deadline_obj = new DateTime($wp_deadline);
 
         // Get project status
         $statuses = !empty($project['current_status']) ? explode(',', $project['current_status']) : [];
         $has_wp_qa_status = in_array('wp_conversion_qa', $statuses);
 
         // Check if deadline is missed
-        if ($today > $wp_deadline && !$has_wp_qa_status) {
+        if ($today > $wp_deadline_obj && !$has_wp_qa_status) {
+            error_log("WP Deadline missed for project #$project_id: Today: " . $today->format('Y-m-d') . ", Deadline: " . $wp_deadline_obj->format('Y-m-d'));
+
             // Check if we already have a missed deadline record for this exact deadline
             $check_query = "SELECT id FROM missed_deadlines
                           WHERE project_id = ? AND deadline_type = 'wp_conversion'
                           AND original_deadline = ?";
             $stmt = $conn->prepare($check_query);
-            $wp_deadline_str = $project['wp_conversion_deadline'];
-            $stmt->bind_param("is", $project_id, $wp_deadline_str);
+            $stmt->bind_param("is", $project_id, $wp_deadline);
             $stmt->execute();
             $exists = $stmt->get_result()->num_rows > 0;
 
@@ -454,21 +477,75 @@ function checkMissedDeadlines($project_id, $user_id) {
                          VALUES (?, 'wp_conversion', ?)";
 
                 $stmt = $conn->prepare($query);
-                $stmt->bind_param("is", $project_id, $wp_deadline_str);
+                $stmt->bind_param("is", $project_id, $wp_deadline);
                 $stmt->execute();
 
                 if ($stmt->affected_rows > 0) {
                     $missed_deadlines['wp_conversion'] = [
                         'id' => $conn->insert_id,
-                        'deadline_date' => $wp_deadline_str
+                        'deadline_date' => $wp_deadline
                     ];
                 }
             }
         }
     }
 
-    // Do the same for project deadline with similar logic
-    // ...
+    // Do the same for project deadline
+    if (!empty($project['project_deadline'])) {
+        // First check if there's an approved extension that changes the deadline
+        $extension_query = "SELECT requested_deadline
+                            FROM deadline_extension_requests
+                            WHERE project_id = ? AND deadline_type = 'project'
+                            AND status = 'approved'
+                            ORDER BY created_at DESC LIMIT 1";
+        $stmt = $conn->prepare($extension_query);
+        $stmt->bind_param("i", $project_id);
+        $stmt->execute();
+        $extension_result = $stmt->get_result();
+
+        // Use the extended deadline if available, otherwise use original
+        $project_deadline = $project['project_deadline'];
+        if ($extension_result->num_rows > 0) {
+            $project_deadline = $extension_result->fetch_assoc()['requested_deadline'];
+        }
+
+        // Check if the current deadline (original or extended) is missed
+        $project_deadline_obj = new DateTime($project_deadline);
+
+        // Get project status
+        $statuses = !empty($project['current_status']) ? explode(',', $project['current_status']) : [];
+        $has_golive_qa_status = in_array('golive_qa', $statuses);
+
+        // Check if deadline is missed
+        if ($today > $project_deadline_obj && !$has_golive_qa_status) {
+            // Check if we already have a missed deadline record for this exact deadline
+            $check_query = "SELECT id FROM missed_deadlines
+                          WHERE project_id = ? AND deadline_type = 'project'
+                          AND original_deadline = ?";
+            $stmt = $conn->prepare($check_query);
+            $stmt->bind_param("is", $project_id, $project_deadline);
+            $stmt->execute();
+            $exists = $stmt->get_result()->num_rows > 0;
+
+            // Only create a new record if one doesn't exist for this deadline
+            if (!$exists) {
+                $query = "INSERT INTO missed_deadlines
+                         (project_id, deadline_type, original_deadline)
+                         VALUES (?, 'project', ?)";
+
+                $stmt = $conn->prepare($query);
+                $stmt->bind_param("is", $project_id, $project_deadline);
+                $stmt->execute();
+
+                if ($stmt->affected_rows > 0) {
+                    $missed_deadlines['project'] = [
+                        'id' => $conn->insert_id,
+                        'deadline_date' => $project_deadline
+                    ];
+                }
+            }
+        }
+    }
 
     return !empty($missed_deadlines) ? $missed_deadlines : null;
 }
