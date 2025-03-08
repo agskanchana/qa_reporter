@@ -413,27 +413,37 @@ require_once 'includes/header.php'
                             // Always display the date
                             echo date('F j, Y', strtotime($wp_deadline));
 
-                            // Check if already in WP QA or later status
-                            if ($has_wp_qa_status || $has_later_status) {
-                                // Show deadline status
-                                echo $deadline_met_status;
+                            // Check if this is an extended deadline (original deadline was missed)
+                            if ($is_extended) {
+                                // Always show "Deadline Missed" with extension count if there was an extension
+                                $missed_text = "Deadline Missed";
+                                if ($extension_count > 0) {
+                                    $missed_text .= " ({$extension_count}x)";
+                                }
+                                echo ' <span class="badge bg-danger ms-2">' . $missed_text . '</span>';
                             } else {
-                                // Not yet at WP QA stage
-                                if (!$interval->invert) {
-                                    // Future date - deadline has not passed yet
-                                    $days_text = $days_remaining . ' days remaining';
-                                    $badge_class = $days_remaining <= 3 ? 'bg-warning' : 'bg-info';
-                                    echo ' <span class="badge ' . $badge_class . '">' . $days_text . '</span>';
+                                // Using original deadline - show status based on project stage
+                                if ($has_wp_qa_status || $has_later_status) {
+                                    // Show deadline status
+                                    echo $deadline_met_status;
                                 } else {
-                                    // Past date - deadline has passed but not in WP QA status
-                                    echo ' <span class="badge bg-danger ms-2">Deadline Missed</span>';
+                                    // Not yet at WP QA stage
+                                    if (!$interval->invert) {
+                                        // Future date - deadline has not passed yet
+                                        $days_text = $days_remaining . ' days remaining';
+                                        $badge_class = $days_remaining <= 3 ? 'bg-warning' : 'bg-info';
+                                        echo ' <span class="badge ' . $badge_class . '">' . $days_text . '</span>';
+                                    } else {
+                                        // Past date - deadline has passed but not in WP QA status
+                                        echo ' <span class="badge bg-danger ms-2">Deadline Missed</span>';
 
-                                    // If the deadline is missed (even if it's an extended deadline), show the extension button
-                                    if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id'] && !$has_pending_wp_extension) {
-                                        echo ' <button type="button" class="btn btn-sm btn-outline-primary"
-                                                data-bs-toggle="modal" data-bs-target="#wpExtensionModal">
-                                                Request Extension
-                                              </button>';
+                                        // If the deadline is missed (even if it's an extended deadline), show the extension button
+                                        if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id'] && !$has_pending_wp_extension) {
+                                            echo ' <button type="button" class="btn btn-sm btn-outline-primary"
+                                                    data-bs-toggle="modal" data-bs-target="#wpExtensionModal">
+                                                    Request Extension
+                                                  </button>';
+                                        }
                                     }
                                 }
                             }
