@@ -413,58 +413,27 @@ require_once 'includes/header.php'
                             // Always display the date
                             echo date('F j, Y', strtotime($wp_deadline));
 
-                            // Check if this is an extended deadline
-                            $is_extended = !empty($wp_original_deadline) && $wp_deadline !== $wp_original_deadline;
-
-                            // Always show "Deadline Missed" if original deadline was missed, regardless of current project status or QA status
-                            if ($is_extended) {
-                                // Get the extension count from approved deadline extensions
-                                $extension_count_query = "SELECT COUNT(*) as extension_count FROM deadline_extension_requests
-                                                        WHERE project_id = ? AND deadline_type = 'wp_conversion'
-                                                        AND status = 'approved'";
-                                $stmt = $conn->prepare($extension_count_query);
-                                $stmt->bind_param("i", $project_id);
-                                $stmt->execute();
-                                $extension_result = $stmt->get_result();
-                                $extension_count = 0;
-                                if ($extension_result && $extension_result->num_rows > 0) {
-                                    $count_row = $extension_result->fetch_assoc();
-                                    $extension_count = isset($count_row['extension_count']) ? (int)$count_row['extension_count'] : 0;
-                                }
-
-                                // Always show the count of times the deadline was missed
-                                $missed_text = "Deadline Missed";
-                                if ($extension_count > 0) {
-                                    $missed_text .= " ({$extension_count})";
-                                }
-                                echo ' <span class="badge bg-danger ms-2">' . $missed_text . '</span>';
+                            // Check if already in WP QA or later status
+                            if ($has_wp_qa_status || $has_later_status) {
+                                // Show deadline status
+                                echo $deadline_met_status;
                             } else {
-                                // Using original deadline - show status based on project stage
-                                if ($has_wp_qa_status || $has_later_status) {
-                                    // Project has reached WP QA status, determine if deadline was met
-                                    if ($wp_qa_date && $wp_qa_date <= $wp_deadline_obj) {
-                                        echo ' <span class="badge bg-success ms-2">Deadline Achieved</span>';
-                                    } else {
-                                        echo ' <span class="badge bg-danger ms-2">Deadline Missed</span>';
-                                    }
+                                // Not yet at WP QA stage
+                                if (!$interval->invert) {
+                                    // Future date - deadline has not passed yet
+                                    $days_text = $days_remaining . ' days remaining';
+                                    $badge_class = $days_remaining <= 3 ? 'bg-warning' : 'bg-info';
+                                    echo ' <span class="badge ' . $badge_class . '">' . $days_text . '</span>';
                                 } else {
-                                    // Not yet reached WP QA status
-                                    if (!$interval->invert) {
-                                        // Future date - deadline has not passed yet
-                                        $days_text = $days_remaining . ' days remaining';
-                                        $badge_class = $days_remaining <= 3 ? 'bg-warning' : 'bg-info';
-                                        echo ' <span class="badge ' . $badge_class . '">' . $days_text . '</span>';
-                                    } else {
-                                        // Past date - deadline has passed but not in WP QA status
-                                        echo ' <span class="badge bg-danger ms-2">Deadline Missed</span>';
+                                    // Past date - deadline has passed but not in WP QA status
+                                    echo ' <span class="badge bg-danger ms-2">Deadline Missed</span>';
 
-                                        // If the deadline is missed (even if it's an extended deadline), show the extension button
-                                        if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id'] && !$has_pending_wp_extension) {
-                                            echo ' <button type="button" class="btn btn-sm btn-outline-primary"
-                                                    data-bs-toggle="modal" data-bs-target="#wpExtensionModal">
-                                                    Request Extension
-                                                  </button>';
-                                        }
+                                    // If the deadline is missed (even if it's an extended deadline), show the extension button
+                                    if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id'] && !$has_pending_wp_extension) {
+                                        echo ' <button type="button" class="btn btn-sm btn-outline-primary"
+                                                data-bs-toggle="modal" data-bs-target="#wpExtensionModal">
+                                                Request Extension
+                                              </button>';
                                     }
                                 }
                             }
@@ -475,32 +444,6 @@ require_once 'includes/header.php'
                             // Show original deadline if extended
                             if ($is_extended) {
                                 echo '<br><small class="text-muted">Original: ' . date('F j, Y', strtotime($wp_original_deadline)) . '</small>';
-                            }
-
-                            // Show extension button for webmasters - but only if not in QA status yet
-                            // For original deadlines, only show if approaching/passed; for extended deadlines, allow requesting again if missed
-                            if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id']
-                                && !$has_pending_wp_extension && !$has_wp_qa_status && !$has_later_status) {
-                                $show_extension_button = false;
-
-                                if ($is_extended) {
-                                    // For extended deadlines, show button if the deadline is missed
-                                    if ($interval->invert) {
-                                        $show_extension_button = true;
-                                    }
-                                } else {
-                                    // For original deadlines, show button if approaching (7 days or less) or passed
-                                    if ($interval->invert || $days_remaining <= 7) {
-                                        $show_extension_button = true;
-                                    }
-                                }
-
-                                if ($show_extension_button) {
-                                    echo ' <button type="button" class="btn btn-sm btn-outline-primary"
-                                            data-bs-toggle="modal" data-bs-target="#wpExtensionModal">
-                                            Request Extension
-                                          </button>';
-                                }
                             }
                         } else {
                             echo '<span class="text-muted">Not set</span>';
