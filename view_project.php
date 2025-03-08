@@ -217,6 +217,11 @@ function updateProjectStatus($conn, $project_id) {
             $stmt = $conn->prepare($history_query);
             $stmt->bind_param("isi", $project_id, $status, $_SESSION['user_id']);
             $stmt->execute();
+
+            // Add special logging for golive_qa status changes
+            if ($status === 'golive_qa') {
+                error_log("Project #{$project_id} reached golive_qa status on " . date('Y-m-d H:i:s'));
+            }
         }
     }
 
@@ -294,13 +299,14 @@ require_once 'includes/header.php'
                         ?>
                     </div>
                     <div class="col-md-6">
-                        <strong>Webmaster:</strong>
+                        <!-- <strong>Webmaster:</strong> -->
                         <?php
+                        /*
                         if ($project['webmaster_name']) {
                             echo htmlspecialchars($project['webmaster_name']);
                         } else {
                             echo '<span class="badge bg-danger">Deleted User</span>';
-                        }
+                        }*/
                         ?>
                     </div>
                 </div>
@@ -472,158 +478,106 @@ require_once 'includes/header.php'
                     <div class="col-md-6">
                         <strong>Project Deadline:</strong>
                         <?php
-                        // Check if there's an approved extension for project deadline
-                        $project_extension_query = "SELECT original_deadline, requested_deadline, status
-                                                   FROM deadline_extension_requests
-                                                   WHERE project_id = ? AND deadline_type = 'project'
-                                                   ORDER BY created_at DESC LIMIT 1";
-                        $stmt = $conn->prepare($project_extension_query);
-                        $stmt->bind_param("i", $project_id);
-                        $stmt->execute();
-                        $project_extension = $stmt->get_result()->fetch_assoc();
+// Project deadline is strict and can't be extended
+$project_deadline = !empty($project['project_deadline']) ? $project['project_deadline'] : '';
 
-                        $project_deadline_display = '';
-                        $has_pending_project_extension = false;
-                        $project_original_deadline = !empty($project['project_deadline']) ? $project['project_deadline'] : '';
-                        $project_deadline = $project_original_deadline;
+// Check if project has golive_qa status
+$has_golive_qa_status = in_array('golive_qa', $statuses);
 
-                        // If there's an approved extension, use the new deadline
-                        if ($project_extension && $project_extension['status'] === 'approved') {
-                            $project_deadline = $project_extension['requested_deadline'];
-                            $project_original_deadline = $project_extension['original_deadline'];
-                            $project_deadline_display = ' <span class="badge bg-info">Extended</span>';
-                        } elseif ($project_extension && $project_extension['status'] === 'pending') {
-                            $has_pending_project_extension = true;
-                            $project_deadline_display = ' <span class="badge bg-warning">Extension Pending</span>';
-                        }
+// Get when project reached golive_qa status
+$project_complete_date = null;
+if ($has_golive_qa_status) {
+    $status_query = "SELECT created_at
+                    FROM project_status_history
+                    WHERE project_id = ? AND status = 'golive_qa'
+                    ORDER BY created_at ASC LIMIT 1";
+    $stmt->bind_param("i", $project_id);
+    $stmt->execute();
+    $status_result = $stmt->get_result();
+    if ($status_result->num_rows > 0) {
+        $row = $status_result->fetch_assoc();
+        if (!empty($row['created_at'])) {
+            $project_complete_date = new DateTime($row['created_at']);
+        }
+    }
+}
 
-                        // Check if project is completed (all stages in QA)
-                        $statuses = !empty($project['current_status']) ? explode(',', $project['current_status']) : [];
-                        $has_all_qa_status = in_array('wp_conversion_qa', $statuses) &&
-                                              in_array('page_creation_qa', $statuses) &&
-                                              in_array('golive_qa', $statuses);
+// Determine deadline met status for project
+$project_deadline_met_status = '';
+if (!empty($project_deadline)) {
+    // Add 23:59:59 to the deadline date to properly consider entire day
+    $project_deadline_obj = new DateTime($project_deadline);
+    $project_deadline_obj->setTime(23, 59, 59);
 
-                        // Get when project was fully completed (all stages in QA)
-                        $project_complete_date = null;
-                        if ($has_all_qa_status) {
-                            // We'll get the latest date among all stages to determine project completion
-                            $status_query = "SELECT MAX(created_at) as completion_date
-                                            FROM project_status_history
-                                            WHERE project_id = ? AND
-                                            (status = 'wp_conversion_qa' OR
-                                             status = 'page_creation_qa' OR
-                                             status = 'golive_qa')";
-                            $stmt->bind_param("i", $project_id);
-                            $stmt->execute();
-                            $status_result = $stmt->get_result();
-                            if ($status_result->num_rows > 0) {
-                                $project_complete_date = new DateTime($status_result->fetch_assoc()['completion_date']);
-                            }
-                        }
+    $today = new DateTime();
+    $interval = $today->diff($project_deadline_obj);
+    $days_remaining = $interval->days;
 
-                        // Determine deadline met status for project
-                        $project_deadline_met_status = '';
-                        if (!empty($project_deadline) && $has_all_qa_status && $project_complete_date) {
-                            $project_deadline_obj = new DateTime($project_deadline);
-                            if ($project_complete_date <= $project_deadline_obj) {
-                                $project_deadline_met_status = '<span class="badge bg-success ms-2">Deadline Achieved</span>';
-                            } else {
-                                $project_deadline_met_status = '<span class="badge bg-danger ms-2">Deadline Missed</span>';
-                            }
-                        }
+    // Always display the deadline date
+    echo date('F j, Y', strtotime($project_deadline));
 
-                        // Check if project has golive_qa status
-                        $statuses = !empty($project['current_status']) ? explode(',', $project['current_status']) : [];
-                        $has_golive_qa_status = in_array('golive_qa', $statuses);
+    if ($has_golive_qa_status) {
+        // Project has golive_qa status, check if deadline was met
+        if ($project_complete_date) {
+            // If project was completed before deadline or deadline is still in the future
+            if ($project_complete_date <= $project_deadline_obj || $today <= $project_deadline_obj) {
+                echo ' <span class="badge bg-success ms-2">Deadline Achieved</span>';
+            } else {
+                echo ' <span class="badge bg-danger ms-2">Deadline Missed</span>';
+            }
+        } else {
+            // If we have golive_qa status but no date recorded (shouldn't happen)
+            // Consider it achieved if deadline is still in the future
+            if ($today <= $project_deadline_obj) {
+                echo ' <span class="badge bg-success ms-2">Deadline Achieved</span>';
+            } else {
+                echo ' <span class="badge bg-danger ms-2">Deadline Missed</span>';
+            }
+        }
+    } else {
+        // Project not in golive_qa status yet
+        if (!$interval->invert) {
+            // Future date - deadline not passed yet
+            $days_text = $days_remaining . ' days remaining';
+            $badge_class = $days_remaining <= 7 ? 'bg-warning' : 'bg-info';
+            echo ' <span class="badge ' . $badge_class . '">' . $days_text . '</span>';
+        } else {
+            // Past date - deadline has passed but project not in golive_qa status
+            echo ' <span class="badge bg-danger ms-2">Deadline Missed</span>';
 
-                        // Get when project reached golive_qa status
-                        $project_complete_date = null;
-                        if ($has_golive_qa_status) {
-                            $status_query = "SELECT created_at
-                                            FROM project_status_history
-                                            WHERE project_id = ? AND status = 'golive_qa'
-                                            ORDER BY created_at ASC LIMIT 1";
-                            $stmt->bind_param("i", $project_id);
-                            $stmt->execute();
-                            $status_result = $stmt->get_result();
-                            if ($status_result->num_rows > 0) {
-                                $project_complete_date = new DateTime($status_result->fetch_assoc()['created_at']);
-                            }
-                        }
+            // Check if we need to ask for a reason
+            $reason_query = "SELECT id FROM missed_deadlines
+                             WHERE project_id = ? AND deadline_type = 'project'
+                             AND reason IS NULL";
+            $stmt->bind_param("i", $project_id);
+            $stmt->execute();
+            $missed_result = $stmt->get_result();
 
-                        // Determine deadline met status for project
-                        $project_deadline_met_status = '';
-                        if (!empty($project_deadline) && $has_golive_qa_status && $project_complete_date) {
-                            $project_deadline_obj = new DateTime($project_deadline);
-                            if ($project_complete_date <= $project_deadline_obj) {
-                                $project_deadline_met_status = '<span class="badge bg-success ms-2">Deadline Achieved</span>';
-                            } else {
-                                $project_deadline_met_status = '<span class="badge bg-danger ms-2">Deadline Missed</span>';
-                            }
-                        }
+            // If no reason record exists, create one
+            if ($missed_result->num_rows === 0) {
+                $check_query = "SELECT COUNT(*) as count FROM missed_deadlines
+                              WHERE project_id = ? AND deadline_type = 'project'";
+                $stmt->bind_param("i", $project_id);
+                $stmt->execute();
+                $exists = $stmt->get_result()->fetch_assoc()['count'] > 0;
 
-                        // Add this immediately after determining $project_deadline_met_status
+                if (!$exists) {
+                    // Insert missed deadline record
+                    $insert_query = "INSERT INTO missed_deadlines
+                                   (project_id, deadline_type, original_deadline)
+                                   VALUES (?, 'project', ?)";
+                    $stmt->bind_param("is", $project_id, $project_deadline);
+                    $stmt->execute();
 
-                        // Debug information to help troubleshoot
-                        error_log("Project #{$project_id} Golive QA status: " . ($has_golive_qa_status ? 'Yes' : 'No'));
-                        if ($project_complete_date) {
-                            error_log("Project #{$project_id} Golive QA date: " . $project_complete_date->format('Y-m-d H:i:s'));
-                        } else {
-                            error_log("Project #{$project_id} Golive QA date not found");
-                        }
-                        if (!empty($project_deadline)) {
-                            error_log("Project #{$project_id} Deadline: " . date('Y-m-d', strtotime($project_deadline)));
-                        } else {
-                            error_log("Project #{$project_id} Deadline not set");
-                        }
-                        error_log("Project #{$project_id} Deadline status: " . ($project_deadline_met_status ? strip_tags($project_deadline_met_status) : 'Not determined'));
-
-                        if (!empty($project_deadline)) {
-                            $project_deadline_obj = new DateTime($project_deadline);
-                            $today = new DateTime();
-                            $interval = $today->diff($project_deadline_obj);
-                            $days_remaining = $interval->days;
-
-                            // Show deadline info differently based on whether golive_qa status is reached
-                            if ($has_golive_qa_status) {
-                                // If project has golive_qa status, show deadline achieved/missed badge
-                                echo date('F j, Y', strtotime($project_deadline));
-                                echo $project_deadline_met_status; // This has "Deadline Achieved" or "Deadline Missed"
-                                echo $project_deadline_display;
-                            } else {
-                                // Project not in golive_qa status yet
-                                if (!$interval->invert) {
-                                    // Future date - deadline not passed yet
-                                    $days_text = $days_remaining . ' days remaining';
-                                    $badge_class = $days_remaining <= 7 ? 'bg-warning' : 'bg-info';
-
-                                    echo date('F j, Y', strtotime($project_deadline));
-                                    echo ' <span class="badge ' . $badge_class . '">' . $days_text . '</span>';
-                                } else {
-                                    // Past date - deadline has passed but project not in golive_qa status
-                                    echo date('F j, Y', strtotime($project_deadline));
-                                    echo ' <span class="badge bg-danger">Deadline Missed</span>';
-                                }
-
-                                echo $project_deadline_display;
-                            }
-
-                            // Show original deadline if extended
-                            if (!empty($project_original_deadline) && $project_deadline !== $project_original_deadline) {
-                                echo '<br><small class="text-muted">Original: ' . date('F j, Y', strtotime($project_original_deadline)) . '</small>';
-                            }
-
-                            // Show extension request button for webmasters
-                            if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id'] && !$has_pending_project_extension) {
-                                echo ' <button type="button" class="btn btn-sm btn-outline-primary"
-                                        data-bs-toggle="modal" data-bs-target="#projectExtensionModal">
-                                        Request Extension
-                                      </button>';
-                            }
-                        } else {
-                            echo '<span class="text-muted">Not set</span>';
-                        }
-                        ?>
+                    // This will trigger the missed deadline reason form on next page load
+                }
+            }
+        }
+    }
+} else {
+    echo '<span class="text-muted">Not set</span>';
+}
+?>
                     </div>
                 </div>
             </div>
@@ -897,44 +851,6 @@ $current_user = $current_user_result->fetch_assoc();
     </div>
 </div>
 
-<!-- Project Deadline Extension Request Modal -->
-<div class="modal fade" id="projectExtensionModal" tabindex="-1" aria-labelledby="projectExtensionModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="projectExtensionModalLabel">Request Project Deadline Extension</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form id="projectExtensionForm" action="request_deadline_extension.php" method="POST">
-                <div class="modal-body">
-                    <input type="hidden" name="project_id" value="<?php echo $project_id; ?>">
-                    <input type="hidden" name="deadline_type" value="project">
-                    <input type="hidden" name="original_deadline" value="<?php echo $project_original_deadline; ?>">
-
-                    <div class="mb-3">
-                        <label for="currentProjectDeadline" class="form-label">Current Deadline</label>
-                        <input type="text" class="form-control" id="currentProjectDeadline" value="<?php echo date('F j, Y', strtotime($project_deadline)); ?>" disabled>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="requestedProjectDeadline" class="form-label">Requested Deadline</label>
-                        <input type="date" class="form-control" id="requestedProjectDeadline" name="requested_deadline" required
-                               min="<?php echo date('Y-m-d', strtotime('+1 day')); ?>">
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="projectExtensionReason" class="form-label">Reason for Extension</label>
-                        <textarea class="form-control" id="projectExtensionReason" name="reason" rows="3" required></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Submit Request</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
 <?php endif; ?>
 
 <!-- Admin Notes Modal -->

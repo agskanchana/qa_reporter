@@ -490,27 +490,13 @@ function checkMissedDeadlines($project_id, $user_id) {
         }
     }
 
-    // Do the same for project deadline
+    // Check project deadline
     if (!empty($project['project_deadline'])) {
-        // First check if there's an approved extension that changes the deadline
-        $extension_query = "SELECT requested_deadline
-                            FROM deadline_extension_requests
-                            WHERE project_id = ? AND deadline_type = 'project'
-                            AND status = 'approved'
-                            ORDER BY created_at DESC LIMIT 1";
-        $stmt = $conn->prepare($extension_query);
-        $stmt->bind_param("i", $project_id);
-        $stmt->execute();
-        $extension_result = $stmt->get_result();
-
-        // Use the extended deadline if available, otherwise use original
+        // Project deadlines cannot be extended, so always use the original
         $project_deadline = $project['project_deadline'];
-        if ($extension_result->num_rows > 0) {
-            $project_deadline = $extension_result->fetch_assoc()['requested_deadline'];
-        }
-
-        // Check if the current deadline (original or extended) is missed
         $project_deadline_obj = new DateTime($project_deadline);
+        // Set time to end of day (23:59:59)
+        $project_deadline_obj->setTime(23, 59, 59);
 
         // Get project status
         $statuses = !empty($project['current_status']) ? explode(',', $project['current_status']) : [];
@@ -518,16 +504,15 @@ function checkMissedDeadlines($project_id, $user_id) {
 
         // Check if deadline is missed
         if ($today > $project_deadline_obj && !$has_golive_qa_status) {
-            // Check if we already have a missed deadline record for this exact deadline
+            // Check if we already have a missed deadline record for this project
             $check_query = "SELECT id FROM missed_deadlines
-                          WHERE project_id = ? AND deadline_type = 'project'
-                          AND original_deadline = ?";
+                          WHERE project_id = ? AND deadline_type = 'project'";
             $stmt = $conn->prepare($check_query);
-            $stmt->bind_param("is", $project_id, $project_deadline);
+            $stmt->bind_param("i", $project_id);
             $stmt->execute();
             $exists = $stmt->get_result()->num_rows > 0;
 
-            // Only create a new record if one doesn't exist for this deadline
+            // Only create a new record if one doesn't exist
             if (!$exists) {
                 $query = "INSERT INTO missed_deadlines
                          (project_id, deadline_type, original_deadline)
