@@ -400,9 +400,14 @@ if (!empty($wp_deadline)) {
         $has_achieved_wp_qa = true;
     }
 
-    // Then check for page_creation or golive statuses as these come AFTER wp_conversion_qa
-    if (!$has_achieved_wp_qa && (in_array('page_creation', $statuses) || in_array('page_creation_qa', $statuses) ||
-        in_array('golive', $statuses) || in_array('golive_qa', $statuses))) {
+    // Then check for page_creation, golive, or completed statuses as these come AFTER wp_conversion_qa
+    if (!$has_achieved_wp_qa && (
+        in_array('page_creation', $statuses) ||
+        in_array('page_creation_qa', $statuses) ||
+        in_array('golive', $statuses) ||
+        in_array('golive_qa', $statuses) ||
+        in_array('completed', $statuses)
+    )) {
         $has_achieved_wp_qa = true;
     }
 
@@ -410,8 +415,12 @@ if (!empty($wp_deadline)) {
     if (!$has_achieved_wp_qa) {
         $history_query = "SELECT 1 FROM project_status_history
                          WHERE project_id = ? AND
-                         (status = 'wp_conversion_qa' OR status = 'page_creation' OR
-                         status = 'page_creation_qa' OR status = 'golive' OR status = 'golive_qa')
+                         (status = 'wp_conversion_qa' OR
+                          status = 'page_creation' OR
+                          status = 'page_creation_qa' OR
+                          status = 'golive' OR
+                          status = 'golive_qa' OR
+                          status = 'completed')
                          LIMIT 1";
         $stmt = $conn->prepare($history_query);
         $stmt->bind_param("i", $project_id);
@@ -423,7 +432,8 @@ if (!empty($wp_deadline)) {
         }
     }
 
-    // Add debug logging to see if we're detecting wp_qa correctly
+    // Add extra debug logging
+    error_log("Project #{$project_id} - Current statuses: " . implode(',', $statuses));
     error_log("Project #{$project_id} has_achieved_wp_qa: " . ($has_achieved_wp_qa ? "true" : "false"));
 
     // Get the achievement date if wp_qa was achieved
