@@ -323,12 +323,14 @@ require_once 'includes/header.php'
                         $has_pending_wp_extension = false;
                         $wp_original_deadline = !empty($project['wp_conversion_deadline']) ? $project['wp_conversion_deadline'] : '';
                         $wp_deadline = $wp_original_deadline;
+                        $is_extended = false; // Define the variable here so it's available throughout
 
                         // If there's an approved extension, use the new deadline
                         if ($wp_extension && $wp_extension['status'] === 'approved') {
                             $wp_deadline = $wp_extension['requested_deadline'];
                             $wp_original_deadline = $wp_extension['original_deadline'];
                             $wp_deadline_display = ' <span class="badge bg-info">Extended</span>';
+                            $is_extended = true; // Set to true if there's an approved extension
                         } elseif ($wp_extension && $wp_extension['status'] === 'pending') {
                             $has_pending_wp_extension = true;
                             $wp_deadline_display = ' <span class="badge bg-warning">Extension Pending</span>';
@@ -401,9 +403,7 @@ require_once 'includes/header.php'
                             }
                         }
 
-                        // Fix 2: WP conversion deadline display logic - replace the existing display section (around line 385-455)
-
-                        // First clean up the duplicate code and implement the correct logic
+                        // Revert to original deadline display logic (around lines 380-450)
                         if (!empty($wp_deadline)) {
                             $wp_deadline_obj = new DateTime($wp_deadline);
                             $today = new DateTime();
