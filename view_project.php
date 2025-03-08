@@ -413,12 +413,11 @@ require_once 'includes/header.php'
                             // Always display the date
                             echo date('F j, Y', strtotime($wp_deadline));
 
-                            // Check if this is an extended deadline (original deadline was missed)
+                            // If deadline was extended, always show the Deadline Missed badge with count
                             if ($is_extended) {
-                                // Always show "Deadline Missed" with extension count if there was an extension
                                 $missed_text = "Deadline Missed";
                                 if ($extension_count > 0) {
-                                    $missed_text .= " ({$extension_count}x)";
+                                    $missed_text .= " ({$extension_count})";
                                 }
                                 echo ' <span class="badge bg-danger ms-2">' . $missed_text . '</span>';
                             } else {
@@ -437,7 +436,7 @@ require_once 'includes/header.php'
                                         // Past date - deadline has passed but not in WP QA status
                                         echo ' <span class="badge bg-danger ms-2">Deadline Missed</span>';
 
-                                        // If the deadline is missed (even if it's an extended deadline), show the extension button
+                                        // If the deadline is missed, show the extension button
                                         if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id'] && !$has_pending_wp_extension) {
                                             echo ' <button type="button" class="btn btn-sm btn-outline-primary"
                                                     data-bs-toggle="modal" data-bs-target="#wpExtensionModal">
@@ -454,6 +453,16 @@ require_once 'includes/header.php'
                             // Show original deadline if extended
                             if ($is_extended) {
                                 echo '<br><small class="text-muted">Original: ' . date('F j, Y', strtotime($wp_original_deadline)) . '</small>';
+
+                                // If extended deadline is also missed, show extension request button
+                                if ($interval->invert && !$has_wp_qa_status && !$has_later_status) {
+                                    if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id'] && !$has_pending_wp_extension) {
+                                        echo ' <button type="button" class="btn btn-sm btn-outline-primary"
+                                                data-bs-toggle="modal" data-bs-target="#wpExtensionModal">
+                                                Request Extension
+                                              </button>';
+                                    }
+                                }
                             }
                         } else {
                             echo '<span class="text-muted">Not set</span>';
