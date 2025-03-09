@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: Mar 08, 2025 at 11:19 AM
+-- Generation Time: Mar 09, 2025 at 06:41 AM
 -- Server version: 8.3.0
 -- PHP Version: 8.2.18
 
@@ -41,19 +41,7 @@ CREATE TABLE IF NOT EXISTS `checklist_items` (
   PRIMARY KEY (`id`),
   KEY `created_by` (`created_by`),
   KEY `idx_archived` (`is_archived`)
-) ENGINE=MyISAM AUTO_INCREMENT=88 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
---
--- Dumping data for table `checklist_items`
---
-
-INSERT INTO `checklist_items` (`id`, `stage`, `title`, `how_to_check`, `how_to_fix`, `created_by`, `is_archived`, `archived_at`, `archived_by`) VALUES
-(87, 'golive', 'golive checklist 2', 'd', 'd', 1, 0, NULL, NULL),
-(83, 'wp_conversion', 'wp conversion checklist 2', 'd', 'd', 1, 0, NULL, NULL),
-(84, 'page_creation', 'page creation checklist 1', 'd', 'd', 1, 0, NULL, NULL),
-(86, 'golive', 'golive checklist 1', 'd', 'd', 1, 0, NULL, NULL),
-(85, 'page_creation', 'page creation checklist 2', 'd', 'd', 1, 0, NULL, NULL),
-(82, 'wp_conversion', 'wp conversion checklist 1', 'd', 'd', 1, 0, NULL, NULL);
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -73,7 +61,7 @@ CREATE TABLE IF NOT EXISTS `comments` (
   KEY `project_id` (`project_id`),
   KEY `checklist_item_id` (`checklist_item_id`),
   KEY `user_id` (`user_id`)
-) ENGINE=MyISAM AUTO_INCREMENT=71 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -99,7 +87,7 @@ CREATE TABLE IF NOT EXISTS `deadline_extension_requests` (
   KEY `project_id` (`project_id`),
   KEY `requested_by` (`requested_by`),
   KEY `reviewed_by` (`reviewed_by`)
-) ENGINE=InnoDB AUTO_INCREMENT=54 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -119,7 +107,7 @@ CREATE TABLE IF NOT EXISTS `missed_deadlines` (
   `recorded_at` datetime NOT NULL,
   PRIMARY KEY (`id`),
   KEY `project_id` (`project_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=62 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -140,7 +128,7 @@ CREATE TABLE IF NOT EXISTS `notifications` (
   KEY `user_id` (`user_id`),
   KEY `role` (`role`),
   KEY `is_read` (`is_read`)
-) ENGINE=MyISAM AUTO_INCREMENT=178 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -167,14 +155,7 @@ CREATE TABLE IF NOT EXISTS `projects` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `unique_project_name` (`name`),
   KEY `webmaster_id` (`webmaster_id`)
-) ENGINE=MyISAM AUTO_INCREMENT=162 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
---
--- Dumping data for table `projects`
---
-
-INSERT INTO `projects` (`id`, `name`, `webmaster_id`, `current_status`, `project_deadline`, `wp_conversion_deadline`, `gp_link`, `ticket_link`, `test_site_link`, `live_site_link`, `created_at`, `updated_at`, `admin_notes`, `webmaster_notes`) VALUES
-(161, 'Dr. Sam', 15, 'page_creation', '2025-04-02', '2025-03-18', 'https://www.ekwaservice.com/support/staff/index.php?/Tickets/Ticket/View/1550137/inbox/159/297/-1', 'https://www.ekwaservice.com/support/staff/index.php?/Tickets/Ticket/View/1550137/inbox/159/297/-1', 'https://www.daraz.lk/', '', '2025-03-08 11:17:29', '2025-03-08 11:18:14', '', '');
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -195,19 +176,7 @@ CREATE TABLE IF NOT EXISTS `project_checklist_status` (
   KEY `project_id` (`project_id`),
   KEY `checklist_item_id` (`checklist_item_id`),
   KEY `updated_by` (`updated_by`)
-) ENGINE=MyISAM AUTO_INCREMENT=1667 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
---
--- Dumping data for table `project_checklist_status`
---
-
-INSERT INTO `project_checklist_status` (`id`, `project_id`, `checklist_item_id`, `status`, `updated_at`, `updated_by`, `is_archived`) VALUES
-(1666, 161, 82, 'passed', '2025-03-08 11:18:11', 1, 0),
-(1665, 161, 85, 'idle', '2025-03-08 11:17:29', NULL, 0),
-(1664, 161, 86, 'idle', '2025-03-08 11:17:29', NULL, 0),
-(1663, 161, 84, 'idle', '2025-03-08 11:17:29', NULL, 0),
-(1662, 161, 83, 'passed', '2025-03-08 11:18:14', 1, 0),
-(1661, 161, 87, 'idle', '2025-03-08 11:17:29', NULL, 0);
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -225,7 +194,7 @@ CREATE TABLE IF NOT EXISTS `project_stage_status` (
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `unique_project_stage` (`project_id`,`stage`)
-) ENGINE=MyISAM AUTO_INCREMENT=39 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -238,8 +207,9 @@ CREATE TABLE IF NOT EXISTS `project_status_history` (
   `id` int NOT NULL AUTO_INCREMENT,
   `project_id` int NOT NULL,
   `status` varchar(50) NOT NULL,
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `action` varchar(20) NOT NULL,
   `created_by` int DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `project_id` (`project_id`),
   KEY `created_by` (`created_by`)
@@ -262,7 +232,7 @@ CREATE TABLE IF NOT EXISTS `qa_assignments` (
   KEY `project_id` (`project_id`),
   KEY `qa_user_id` (`qa_user_id`),
   KEY `assigned_by` (`assigned_by`)
-) ENGINE=MyISAM AUTO_INCREMENT=67 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -281,19 +251,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `username` (`username`),
   UNIQUE KEY `unique_email` (`email`(191))
-) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
---
--- Dumping data for table `users`
---
-
-INSERT INTO `users` (`id`, `username`, `email`, `password`, `role`, `created_at`) VALUES
-(1, 'admin', 'admin@temp.com', '$2y$10$WvTWAvXyF3xy9lphncN8MuYiBu5ProZmB74QRRnDHATH6BjTqv4r6', 'admin', '2025-01-30 09:56:02'),
-(11, 'janith', 'janith@temp.com', '$2y$10$Pb/iIND1q00h2TlyZKL1A.Ra4Rc/bx3tZELnxWZmE0pqO6T5sRuJu', 'webmaster', '2025-02-19 12:10:26'),
-(12, 'nadeeka', 'nadeeka@temp.com', '$2y$10$sIMJKg4FLuo68WqDRRDRu.ogJs21U.CkWDnpUkTzF08qXTAkJ40sW', 'qa_manager', '2025-02-19 12:19:17'),
-(13, 'shifnas', 'shifnas@temp.com', '$2y$10$aZjHEBE/E4OYxzZZE.oc0OmaA5/Pgh/npHUKM3/LnXy6uLsd6Gmzy', 'qa_reporter', '2025-02-19 12:19:28'),
-(14, 'menuka', 'menuka@ek.com', '$2y$10$jIN6ykoF17Y/a9.7GIGshepr/4lsblZrcsEWZm035Z2Wfi0dhgAAm', 'webmaster', '2025-02-20 12:53:35'),
-(15, 'sam', 'sam@ekwa.com', '$2y$10$nRYjquWJvA45UdwupGP5bendB36wt67ZyHbacPxtEKiPxIwd6k5Xu', 'webmaster', '2025-02-22 13:53:27');
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

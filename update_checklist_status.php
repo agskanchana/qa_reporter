@@ -2,6 +2,45 @@
 
 require_once 'includes/config.php';
 
+/**
+ * Record project status changes in history table
+ * @param mysqli $conn Database connection
+ * @param int $project_id Project ID
+ * @param array $current_statuses Previous statuses array
+ * @param array $new_statuses New statuses array
+ * @param int $user_id User who made the change
+ */
+function recordProjectStatusHistory($conn, $project_id, $current_statuses, $new_statuses, $user_id) {
+    // Convert to arrays if they're not already
+    if (is_string($current_statuses)) {
+        $current_statuses = !empty($current_statuses) ? explode(',', $current_statuses) : [];
+    }
+    if (is_string($new_statuses)) {
+        $new_statuses = !empty($new_statuses) ? explode(',', $new_statuses) : [];
+    }
+
+    // Find newly added statuses
+    foreach ($new_statuses as $status) {
+        if (!in_array($status, $current_statuses)) {
+            // This is a new status, record it in the history
+            $history_query = "INSERT INTO project_status_history
+                            (project_id, status, action, created_by, created_at)
+                            VALUES (?, ?, 'updated', ?, NOW())";
+            $stmt = $conn->prepare($history_query);
+
+            // Make sure user ID is available
+            $stmt->bind_param("isi", $project_id, $status, $user_id);
+            $result = $stmt->execute();
+
+            if (!$result) {
+                error_log("Failed to record status history: " . $stmt->error);
+            } else {
+                error_log("Successfully recorded status '{$status}' in project history for project #{$project_id}");
+            }
+        }
+    }
+}
+
 function getAdminUserId($conn) {
     $stmt = $conn->prepare("SELECT id FROM users WHERE username = 'admin'");
     $stmt->execute();
@@ -125,7 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             if ($current_stage === 'wp_conversion' && $new_status === 'fixed') {
                 // Check if the test_site_link is empty
                 $test_site_query = "SELECT test_site_link FROM projects WHERE id = ?";
-                $stmt = $conn->prepare($test_site_query);
+                $stmt->prepare($test_site_query);
                 $stmt->bind_param("i", $project_id);
                 $stmt->execute();
                 $test_site_result = $stmt->get_result();
@@ -139,7 +178,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             if ($current_stage === 'golive' && $new_status === 'fixed') {
                 // Check if the live_site_link is empty
                 $live_site_query = "SELECT live_site_link FROM projects WHERE id = ?";
-                $stmt = $conn->prepare($live_site_query);
+                $stmt->prepare($live_site_query);
                 $stmt->bind_param("i", $project_id);
                 $stmt->execute();
                 $live_site_result = $stmt->get_result();
@@ -181,10 +220,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             sort($new_statuses);
             $new_project_status = implode(',', array_unique($new_statuses));
 
+            // Record status changes in history table before updating project
+            recordProjectStatusHistory($conn, $project_id, $current_statuses, $new_statuses, $_SESSION['user_id']);
+
             $update_project = "UPDATE projects SET current_status = ? WHERE id = ?";
             $stmt = $conn->prepare($update_project);
             $stmt->bind_param("si", $new_project_status, $project_id);
             $stmt->execute();
+
         } else if (in_array($user_role, ['qa_reporter', 'qa_manager', 'admin'])) {
             $all_items_reviewed = ($status_counts['passed_count'] + $status_counts['failed_count']) == $status_counts['total'];
 
@@ -251,8 +294,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 if (!empty($current_statuses)) {
                     sort($current_statuses);
                     $new_project_status = implode(',', array_unique($current_statuses));
+
+                    // Record status history before updating
+                    recordProjectStatusHistory($conn, $project_id, explode(',', $current_project_status), $current_statuses, $_SESSION['user_id']);
+
                     $update_project = "UPDATE projects SET current_status = ? WHERE id = ?";
-                    $stmt->prepare($update_project);
+                    $stmt = $conn->prepare($update_project);
                     $stmt->bind_param("si", $new_project_status, $project_id);
                     $stmt->execute();
                 }

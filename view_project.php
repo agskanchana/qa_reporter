@@ -28,8 +28,6 @@ if (!$project) {
     exit();
 }
 
-// Add this code right after getting the project details (around line 100-110)
-
 // Get current status and prepare status flags that will be used later
 $statuses = !empty($project['current_status']) ? explode(',', $project['current_status']) : [];
 
@@ -48,40 +46,9 @@ $has_wp_qa_status = in_array('wp_conversion_qa', $statuses) || $wp_qa_history->n
 // Check for any status beyond WP conversion (page_creation or golive)
 $has_later_status = in_array('page_creation_qa', $statuses) || in_array('golive_qa', $statuses);
 
-// Get WP conversion deadline info
+// Get WP conversion deadline info - simplified without extension logic
 $wp_deadline = !empty($project['wp_conversion_deadline']) ? $project['wp_conversion_deadline'] : '';
-$wp_original_deadline = $wp_deadline; // Default to the same as current deadline
 $wp_deadline_display = '';
-$has_pending_wp_extension = false;
-$is_extended = false;
-
-// Check if there's an extension request
-$extension_query = "SELECT * FROM deadline_extension_requests
-                    WHERE project_id = ? AND deadline_type = 'wp_conversion'
-                    ORDER BY created_at DESC LIMIT 1";
-$stmt = $conn->prepare($extension_query);
-$stmt->bind_param("i", $project_id);
-$stmt->execute();
-$extension_result = $stmt->get_result();
-
-if ($extension_result->num_rows > 0) {
-    $extension = $extension_result->fetch_assoc();
-
-    // Save the original deadline before any extensions
-    $wp_original_deadline = $extension['original_deadline'];
-
-    // If extension is approved, use the new deadline
-    if ($extension['status'] === 'approved') {
-        $wp_deadline = $extension['requested_deadline'];
-        $wp_deadline_display = ' <span class="badge bg-info">Extended</span>';
-        $is_extended = true;
-    }
-    // If extension is pending, show pending badge
-    elseif ($extension['status'] === 'pending') {
-        $has_pending_wp_extension = true;
-        $wp_deadline_display = ' <span class="badge bg-warning">Extension Pending</span>';
-    }
-}
 
 // Now that we have $project, we can check for missed deadlines
 if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id']) {
@@ -215,7 +182,7 @@ function updateProjectStatus($conn, $project_id) {
     $stmt = $conn->prepare($current_query);
     $stmt->bind_param("i", $project_id);
     $stmt->execute();
-    $current_status = $stmt->get_result()->fetch_assoc()['current_status'];
+    $current_status = $stmt->get_result()->fetch_assoc()['current_status'] ?? '';
 
     $current_statuses = !empty($current_status) ? explode(',', $current_status) : [];
     $new_statuses = [];
@@ -251,27 +218,35 @@ function updateProjectStatus($conn, $project_id) {
         $stmt = $conn->prepare($update_query);
         $stmt->bind_param("si", $combined_status, $project_id);
         $stmt->execute();
+
+        // Debug log
+        error_log("Project #{$project_id} status updated to: {$combined_status}");
     }
-
-    // Get current statuses from the database
-    $current_query = "SELECT current_status FROM projects WHERE id = ?";
-    $stmt = $conn->prepare($current_query);
-    $stmt->bind_param("i", $project_id);
-    $stmt->execute();
-    $current_status = $stmt->get_result()->fetch_assoc()['current_status'];
-
-    $current_statuses = !empty($current_status) ? explode(',', $current_status) : [];
 
     // Compare new_statuses with current_statuses to detect changes
     foreach ($new_statuses as $status) {
+        // Check if this status is newly added (wasn't in the previous status list)
         if (!in_array($status, $current_statuses)) {
             // This is a new status, record it in the history
+            error_log("Recording new status in history: {$status} for project #{$project_id}");
+
+            // The project_status_history table requires an action field according to the SQL schema
             $history_query = "INSERT INTO project_status_history
-                            (project_id, status, created_by)
-                            VALUES (?, ?, ?)";
+                            (project_id, status, action, created_by)
+                            VALUES (?, ?, 'updated', ?)";
             $stmt = $conn->prepare($history_query);
-            $stmt->bind_param("isi", $project_id, $status, $_SESSION['user_id']);
-            $stmt->execute();
+
+            // Make sure user ID is available
+            $user_id = $_SESSION['user_id'] ?? 1; // Default to 1 if not set
+
+            $stmt->bind_param("isi", $project_id, $status, $user_id);
+            $result = $stmt->execute();
+
+            if (!$result) {
+                error_log("Failed to record status history: " . $stmt->error);
+            } else {
+                error_log("Successfully recorded status '{$status}' in history for project #{$project_id}");
+            }
 
             // Add special logging for golive_qa status changes
             if ($status === 'golive_qa') {
@@ -328,6 +303,7 @@ require_once 'includes/header.php'
                 <div class="row mb-2">
                     <div class="col-md-6">
                         <strong>Status:</strong>
+                        <span id="project-status-badges">
                         <?php
                         $statuses = !empty($project['current_status']) ? explode(',', $project['current_status']) : [];
                         if (empty($statuses)): ?>
@@ -352,6 +328,7 @@ require_once 'includes/header.php'
                             endforeach;
                         endif;
                         ?>
+                        </span>
                     </div>
                     <div class="col-md-6">
                         <!-- <strong>Webmaster:</strong> -->
@@ -370,7 +347,7 @@ require_once 'includes/header.php'
                     <div class="col-md-6">
                         <strong>WP Conversion Deadline:</strong>
                         <?php
-// Replace lines 407-573 with this code (WP Conversion deadline display section)
+// Replace the WP conversion deadline display section (around line 400-445)
 
 // WP Conversion deadline display
 if (!empty($wp_deadline)) {
@@ -382,153 +359,52 @@ if (!empty($wp_deadline)) {
     $interval = $today->diff($wp_deadline_obj);
     $days_remaining = $interval->days;
 
-    $using_extended_deadline = false;
-    if ($wp_original_deadline && $wp_deadline != $wp_original_deadline) {
-        $wp_original_deadline_obj = new DateTime($wp_original_deadline);
-        $wp_original_deadline_obj->setTime(23, 59, 59);
-        $using_extended_deadline = true;
-    }
-
     // Always display the date
     echo date('F j, Y', strtotime($wp_deadline));
 
-    // CRITICAL FIX: Check if wp_conversion_qa is in current status OR in history
-    $has_achieved_wp_qa = false;
+    // First check status history for ANY wp_conversion_qa record
+    $has_ever_reached_wp_qa = false;
+    $first_wp_qa_date = null;
 
-    // First check current status for wp_conversion_qa
-    if (in_array('wp_conversion_qa', $statuses)) {
-        $has_achieved_wp_qa = true;
+    $wp_status_history_query = "SELECT created_at FROM project_status_history
+                              WHERE project_id = ? AND status = 'wp_conversion_qa'
+                              ORDER BY created_at ASC LIMIT 1";
+    $stmt = $conn->prepare($wp_status_history_query);
+    $stmt->bind_param("i", $project_id);
+    $stmt->execute();
+    $wp_qa_history = $stmt->get_result();
+
+    if ($wp_qa_history->num_rows > 0) {
+        $has_ever_reached_wp_qa = true;
+        $row = $wp_qa_history->fetch_assoc();
+        $first_wp_qa_date = new DateTime($row['created_at']);
+        error_log("Project #{$project_id} first reached wp_conversion_qa on: " . $first_wp_qa_date->format('Y-m-d H:i:s'));
     }
 
-    // Then check for page_creation, golive, or completed statuses as these come AFTER wp_conversion_qa
-    if (!$has_achieved_wp_qa && (
-        in_array('page_creation', $statuses) ||
-        in_array('page_creation_qa', $statuses) ||
-        in_array('golive', $statuses) ||
-        in_array('golive_qa', $statuses) ||
-        in_array('completed', $statuses)
-    )) {
-        $has_achieved_wp_qa = true;
-    }
+    // Also consider current status or statuses beyond wp_conversion_qa
+    $has_wp_qa_now = in_array('wp_conversion_qa', $statuses) ||
+                    in_array('page_creation_qa', $statuses) ||
+                    in_array('golive_qa', $statuses);
 
-    // If still not found, check the project history table
-    if (!$has_achieved_wp_qa) {
-        $history_query = "SELECT 1 FROM project_status_history
-                         WHERE project_id = ? AND
-                         (status = 'wp_conversion_qa' OR
-                          status = 'page_creation' OR
-                          status = 'page_creation_qa' OR
-                          status = 'golive' OR
-                          status = 'golive_qa' OR
-                          status = 'completed')
-                         LIMIT 1";
-        $stmt = $conn->prepare($history_query);
-        $stmt->bind_param("i", $project_id);
-        $stmt->execute();
-        $has_ever_reached_wp_qa = ($stmt->get_result()->num_rows > 0);
-
-        if ($has_ever_reached_wp_qa) {
-            $has_achieved_wp_qa = true;
-        }
-    }
-
-    // Add extra debug logging
-    error_log("Project #{$project_id} - Current statuses: " . implode(',', $statuses));
-    error_log("Project #{$project_id} has_achieved_wp_qa: " . ($has_achieved_wp_qa ? "true" : "false"));
-
-    // Get the achievement date if wp_qa was achieved
-    $wp_qa_date = null;
-    if ($has_achieved_wp_qa) {
-        $status_query = "SELECT created_at FROM project_status_history
-                        WHERE project_id = ? AND status = 'wp_conversion_qa'
-                        ORDER BY created_at ASC LIMIT 1";
-        $stmt = $conn->prepare($status_query);
-        $stmt->bind_param("i", $project_id);
-        $stmt->execute();
-        $status_result = $stmt->get_result();
-        if ($status_result && $status_result->num_rows > 0) {
-            $row = $status_result->fetch_assoc();
-            if (!empty($row['created_at'])) {
-                $wp_qa_date = new DateTime($row['created_at']);
-            }
-        }
-    }
-
-    // Display the appropriate badge based on wp_qa achievement
-    if ($has_achieved_wp_qa) {
-        if ($wp_qa_date) {
-            // If deadline was extended but original deadline was missed
-            if ($using_extended_deadline && $wp_original_deadline_obj && $wp_qa_date > $wp_original_deadline_obj) {
-                $missed_text = "Deadline Missed";
-                if ($extension_count > 0) {
-                    $missed_text .= " ({$extension_count}x)";
-                }
-                echo ' <span class="badge bg-danger ms-2">' . $missed_text . '</span>';
-            }
-            // If they met the current deadline (original or extended)
-            elseif ($wp_qa_date <= $wp_deadline_obj) {
-                echo ' <span class="badge bg-success ms-2">Deadline Achieved</span>';
-            }
-            // If they missed even the extended deadline
-            else {
-                $missed_text = "Deadline Missed";
-                if ($extension_count > 0) {
-                    $missed_text .= " ({$extension_count}x)";
-                }
-                echo ' <span class="badge bg-danger ms-2">' . $missed_text . '</span>';
-            }
+    // Display the appropriate badge based on history
+    if ($has_ever_reached_wp_qa) {
+        // Project has reached wp_qa at least once
+        if ($first_wp_qa_date <= $wp_deadline_obj) {
+            echo ' <span class="badge bg-success ms-2">Deadline Achieved</span>';
         } else {
-            // No date found but we know they reached WP QA status
-            // Consider it achieved if deadline is still in future
-            if ($today <= $wp_deadline_obj) {
-                echo ' <span class="badge bg-success ms-2">Deadline Achieved</span>';
-            } else {
-                $missed_text = "Deadline Missed";
-                if ($extension_count > 0) {
-                    $missed_text .= " ({$extension_count}x)";
-                }
-                echo ' <span class="badge bg-danger ms-2">' . $missed_text . '</span>';
-            }
+            echo ' <span class="badge bg-danger ms-2">Deadline Missed</span>';
         }
-    }
-    // Project has never reached wp_conversion_qa status
-    else {
-        // If deadline was extended, always show the deadline missed badge
-        if ($is_extended) {
-            $missed_text = "Deadline Missed";
-            if ($extension_count > 0) {
-                $missed_text .= " ({$extension_count}x)";
-            }
-            echo ' <span class="badge bg-danger ms-2">' . $missed_text . '</span>';
+    } else {
+        // Project has never reached wp_conversion_qa status
+        if ($today <= $wp_deadline_obj) {
+            // Future date - deadline has not passed yet
+            $days_text = $days_remaining . ' days remaining';
+            $badge_class = $days_remaining <= 3 ? 'bg-warning' : 'bg-info';
+            echo ' <span class="badge ' . $badge_class . '">' . $days_text . '</span>';
+        } else {
+            // Past date - deadline has passed but project not in WP QA status
+            echo ' <span class="badge bg-danger ms-2">Deadline Missed</span>';
         }
-        // If using original deadline - show days remaining or missed
-        else {
-            if (!$interval->invert) {
-                // Future date - deadline has not passed yet
-                $days_text = $days_remaining . ' days remaining';
-                $badge_class = $days_remaining <= 3 ? 'bg-warning' : 'bg-info';
-                echo ' <span class="badge ' . $badge_class . '">' . $days_text . '</span>';
-            } else {
-                // Past date - deadline has passed but not in WP QA status
-                echo ' <span class="badge bg-danger ms-2">Deadline Missed</span>';
-
-                // If the deadline is missed, show the extension button
-                if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id'] && !$has_pending_wp_extension) {
-                    echo ' <button type="button" class="btn btn-sm btn-outline-primary"
-                            data-bs-toggle="modal" data-bs-target="#wpExtensionModal">
-                            Request Extension
-                          </button>';
-                }
-            }
-        }
-    }
-
-    // Always show extension badge if applicable
-    echo $wp_deadline_display;
-
-    // Show original deadline if extended
-    if ($is_extended) {
-        echo '<br><small class="text-muted">Original: ' . date('F j, Y', strtotime($wp_original_deadline)) . '</small>';
     }
 } else {
     echo '<span class="text-muted">Not set</span>';
@@ -538,32 +414,65 @@ if (!empty($wp_deadline)) {
                     <div class="col-md-6">
                         <strong>Project Deadline:</strong>
                         <?php
+// Replace the project deadline display section (around line 445-560)
+
 // Project deadline is strict and can't be extended
 $project_deadline = !empty($project['project_deadline']) ? $project['project_deadline'] : '';
 
-// Check if project has golive_qa status
-$has_golive_qa_status = in_array('golive_qa', $statuses);
+// First check status history for ANY golive_qa record
+$has_ever_reached_golive_qa = false;
+$first_golive_qa_date = null;
 
-// Get when project reached golive_qa status
-$project_complete_date = null;
-if ($has_golive_qa_status) {
-    $status_query = "SELECT created_at
-                    FROM project_status_history
-                    WHERE project_id = ? AND status = 'golive_qa'
-                    ORDER BY created_at ASC LIMIT 1";
-    $stmt->bind_param("i", $project_id);
-    $stmt->execute();
-    $status_result = $stmt->get_result();
-    if ($status_result->num_rows > 0) {
-        $row = $status_result->fetch_assoc();
-        if (!empty($row['created_at'])) {
-            $project_complete_date = new DateTime($row['created_at']);
-        }
-    }
+$status_history_query = "SELECT created_at FROM project_status_history
+                        WHERE project_id = ? AND status = 'golive_qa'
+                        ORDER BY created_at ASC LIMIT 1";
+$stmt = $conn->prepare($status_history_query);
+$stmt->bind_param("i", $project_id);
+$stmt->execute();
+$golive_history = $stmt->get_result();
+
+if ($golive_history->num_rows > 0) {
+    $has_ever_reached_golive_qa = true;
+    $row = $golive_history->fetch_assoc();
+    $first_golive_qa_date = new DateTime($row['created_at']);
+    error_log("Project #{$project_id} first reached golive_qa on: " . $first_golive_qa_date->format('Y-m-d H:i:s'));
+} else {
+    error_log("Project #{$project_id} has never reached golive_qa according to history");
 }
 
+// Add this debugging code right after checking for golive_qa history (around line 440)
+
+// Add debug logging to check if SQL query is working
+if ($golive_history->num_rows == 0) {
+    // Check if the table has any data at all
+    $check_query = "SELECT COUNT(*) as count FROM project_status_history";
+    $check_result = $conn->query($check_query);
+    $total_count = $check_result->fetch_assoc()['count'];
+
+    error_log("DEBUG: project_status_history table has {$total_count} total records");
+
+    // Check project specific records
+    $check_project_query = "SELECT * FROM project_status_history WHERE project_id = ?";
+    $stmt = $conn->prepare($check_project_query);
+    $stmt->bind_param("i", $project_id);
+    $stmt->execute();
+    $project_history = $stmt->get_result();
+
+    error_log("DEBUG: Found " . $project_history->num_rows . " history records for project #{$project_id}");
+
+    // Check if there are any golive_qa records in the entire table
+    $check_golive_query = "SELECT COUNT(*) as count FROM project_status_history WHERE status = 'golive_qa'";
+    $golive_count_result = $conn->query($check_golive_query);
+    $golive_count = $golive_count_result->fetch_assoc()['count'];
+
+    error_log("DEBUG: There are {$golive_count} golive_qa records in the entire history table");
+}
+
+// Also check if it's currently in a completed status
+$has_completed_status = in_array('completed', $statuses);
+$has_golive_qa_status = in_array('golive_qa', $statuses);
+
 // Determine deadline met status for project
-$project_deadline_met_status = '';
 if (!empty($project_deadline)) {
     // Add 23:59:59 to the deadline date to properly consider entire day
     $project_deadline_obj = new DateTime($project_deadline);
@@ -576,27 +485,30 @@ if (!empty($project_deadline)) {
     // Always display the deadline date
     echo date('F j, Y', strtotime($project_deadline));
 
-    if ($has_golive_qa_status) {
-        // Project has golive_qa status, check if deadline was met
-        if ($project_complete_date) {
-            // If project was completed before deadline or deadline is still in the future
-            if ($project_complete_date <= $project_deadline_obj || $today <= $project_deadline_obj) {
+    // First determine if the project ever reached golive_qa status
+    if ($has_ever_reached_golive_qa) {
+        // Project has reached golive_qa at least once, check if it was before the deadline
+        if ($first_golive_qa_date && $project_deadline_obj) {
+            if ($first_golive_qa_date <= $project_deadline_obj) {
                 echo ' <span class="badge bg-success ms-2">Deadline Achieved</span>';
+                error_log("Project #{$project_id}: Deadline achieved (golive_qa on " .
+                          $first_golive_qa_date->format('Y-m-d') . ", deadline was " .
+                          $project_deadline_obj->format('Y-m-d') . ")");
             } else {
                 echo ' <span class="badge bg-danger ms-2">Deadline Missed</span>';
+                error_log("Project #{$project_id}: Deadline missed (golive_qa on " .
+                          $first_golive_qa_date->format('Y-m-d') . ", deadline was " .
+                          $project_deadline_obj->format('Y-m-d') . ")");
             }
         } else {
-            // If we have golive_qa status but no date recorded (shouldn't happen)
-            // Consider it achieved if deadline is still in the future
-            if ($today <= $project_deadline_obj) {
-                echo ' <span class="badge bg-success ms-2">Deadline Achieved</span>';
-            } else {
-                echo ' <span class="badge bg-danger ms-2">Deadline Missed</span>';
-            }
+            // If for some reason we couldn't determine exact date of first golive_qa
+            // but we know it happened (from has_ever_reached_golive_qa flag)
+            echo ' <span class="badge bg-success ms-2">Deadline Status: Unknown</span>';
+            error_log("Project #{$project_id}: Couldn't determine exact date of first golive_qa status");
         }
     } else {
-        // Project not in golive_qa status yet
-        if (!$interval->invert) {
+        // Project has never reached golive_qa status
+        if ($today <= $project_deadline_obj) {
             // Future date - deadline not passed yet
             $days_text = $days_remaining . ' days remaining';
             $badge_class = $days_remaining <= 7 ? 'bg-warning' : 'bg-info';
@@ -609,6 +521,7 @@ if (!empty($project_deadline)) {
             $reason_query = "SELECT id FROM missed_deadlines
                              WHERE project_id = ? AND deadline_type = 'project'
                              AND reason IS NULL";
+            $stmt = $conn->prepare($reason_query);  // This was missing before
             $stmt->bind_param("i", $project_id);
             $stmt->execute();
             $missed_result = $stmt->get_result();
@@ -617,6 +530,7 @@ if (!empty($project_deadline)) {
             if ($missed_result->num_rows === 0) {
                 $check_query = "SELECT COUNT(*) as count FROM missed_deadlines
                               WHERE project_id = ? AND deadline_type = 'project'";
+                $stmt = $conn->prepare($check_query);
                 $stmt->bind_param("i", $project_id);
                 $stmt->execute();
                 $exists = $stmt->get_result()->fetch_assoc()['count'] > 0;
@@ -626,10 +540,9 @@ if (!empty($project_deadline)) {
                     $insert_query = "INSERT INTO missed_deadlines
                                    (project_id, deadline_type, original_deadline)
                                    VALUES (?, 'project', ?)";
+                    $stmt->prepare($insert_query);
                     $stmt->bind_param("is", $project_id, $project_deadline);
                     $stmt->execute();
-
-                    // This will trigger the missed deadline reason form on next page load
                 }
             }
         }
@@ -871,47 +784,6 @@ $stmt->execute();
 $current_user_result = $stmt->get_result();
 $current_user = $current_user_result->fetch_assoc();
 ?>
-<?php if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id']): ?>
-<!-- WP Conversion Deadline Extension Request Modal -->
-<div class="modal fade" id="wpExtensionModal" tabindex="-1" aria-labelledby="wpExtensionModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="wpExtensionModalLabel">Request WP Conversion Deadline Extension</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form id="wpExtensionForm" action="request_deadline_extension.php" method="POST">
-                <div class="modal-body">
-                    <input type="hidden" name="project_id" value="<?php echo $project_id; ?>">
-                    <input type="hidden" name="deadline_type" value="wp_conversion">
-                    <input type="hidden" name="original_deadline" value="<?php echo $wp_original_deadline; ?>">
-
-                    <div class="mb-3">
-                        <label for="currentWpDeadline" class="form-label">Current Deadline</label>
-                        <input type="text" class="form-control" id="currentWpDeadline" value="<?php echo date('F j, Y', strtotime($wp_deadline)); ?>" disabled>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="requestedWpDeadline" class="form-label">Requested Deadline</label>
-                        <input type="date" class="form-control" id="requestedWpDeadline" name="requested_deadline" required
-                               min="<?php echo date('Y-m-d', strtotime('+1 day')); ?>">
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="wpExtensionReason" class="form-label">Reason for Extension</label>
-                        <textarea class="form-control" id="wpExtensionReason" name="reason" rows="3" required></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Submit Request</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<?php endif; ?>
 
 <!-- Admin Notes Modal -->
 <?php if ($user_role === 'admin'): ?>
@@ -1003,19 +875,50 @@ document.querySelectorAll('form[data-status-form]').forEach(form => {
 
                 // Update badge text and class
                 statusBadge.textContent = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
-                statusBadge.className = `status-badge badge bg-${
+                statusBadge.className = `badge ms-2 bg-${
                     newStatus === 'passed' ? 'success' :
                     newStatus === 'failed' ? 'danger' :
                     newStatus === 'fixed' ? 'warning' : 'secondary'
                 }`;
 
-                // Update project status if it changed
+                // Update project status badges if it changed
                 if (data.newStatus) {
-                    const projectStatusBadge = document.querySelector('.project-status-badge');
-                    if (projectStatusBadge) {
-                        projectStatusBadge.textContent = data.newStatus.replace(/_/g, ' ').replace(/\w\S*/g,
-                            txt => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
-                        );
+                    // Get the status badges container by ID
+                    const statusBadgesContainer = document.getElementById('project-status-badges');
+
+                    if (statusBadgesContainer) {
+                        // Clear existing badges
+                        statusBadgesContainer.innerHTML = '';
+
+                        // Process the new status string into an array of statuses
+                        const newStatuses = data.newStatus.split(',').filter(s => s.trim() !== '');
+
+                        if (newStatuses.length === 0) {
+                            // No statuses
+                            statusBadgesContainer.innerHTML = '<span class="badge bg-secondary me-1">No Status</span>';
+                        } else {
+                            // Add each status as a badge
+                            newStatuses.forEach(status => {
+                                // Determine badge color based on status
+                                let badgeClass = 'secondary';
+                                if (status.includes('wp_conversion')) {
+                                    badgeClass = 'info';
+                                } else if (status.includes('page_creation')) {
+                                    badgeClass = 'warning';
+                                } else if (status.includes('golive')) {
+                                    badgeClass = 'success';
+                                } else if (status === 'completed') {
+                                    badgeClass = 'primary';
+                                }
+
+                                // Create badge HTML
+                                const formattedStatus = status.replace(/_/g, ' ')
+                                                            .replace(/\b\w/g, l => l.toUpperCase());
+                                statusBadgesContainer.innerHTML += `<span class="badge bg-${badgeClass} me-1">${formattedStatus}</span>`;
+                            });
+                        }
+
+                        console.log(`Updated project status to: ${data.newStatus}`);
                     }
                 }
 
