@@ -648,10 +648,10 @@ function getStatusBadgeClass($status) {
         <div class="row mb-4" data-aos="fade-up">
             <div class="col-lg-8 mx-auto text-center">
                 <h2 class="section-title">Current Active Projects</h2>
-                <p class="description-text">
+                <!-- <p class="description-text">
                     This dashboard shows all current active projects in development.
                     Projects in golive QA or completed status are not displayed here.
-                </p>
+                </p> -->
             </div>
         </div>
 

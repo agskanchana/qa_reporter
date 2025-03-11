@@ -20,7 +20,10 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="<?php echo url('dashboard.php'); ?>">Dashboard</a>
+                        <a class="nav-link" href="<?php echo url('dashboard.php'); ?>">Dashboard old </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="<?php echo url(); ?>">Dashboard  </a>
                     </li>
                     <?php if (in_array($user_role, ['admin', 'qa_manager'])): ?>
                     <li class="nav-item">

@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: Mar 09, 2025 at 01:46 PM
+-- Generation Time: Mar 10, 2025 at 03:22 PM
 -- Server version: 8.3.0
 -- PHP Version: 8.2.18
 
@@ -211,16 +211,18 @@ CREATE TABLE IF NOT EXISTS `projects` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `unique_project_name` (`name`),
   KEY `webmaster_id` (`webmaster_id`)
-) ENGINE=MyISAM AUTO_INCREMENT=202 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=MyISAM AUTO_INCREMENT=204 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
 -- Dumping data for table `projects`
 --
 
 INSERT INTO `projects` (`id`, `name`, `webmaster_id`, `current_status`, `project_deadline`, `wp_conversion_deadline`, `gp_link`, `ticket_link`, `test_site_link`, `live_site_link`, `created_at`, `updated_at`, `admin_notes`, `webmaster_notes`) VALUES
+(203, 'Dr. Strange', 15, 'wp_conversion_qa', '2025-04-03', '2025-03-19', 'https://www.ekwaservice.com/support/staff/index.php?/Tickets/Ticket/View/1550137/inbox/159/297/-1', 'https://www.ekwaservice.com/support/staff/index.php?/Tickets/Ticket/View/1550137/inbox/159/297/-1', 'https://www.emp-management.net/', '', '2025-03-10 08:13:05', '2025-03-10 08:13:48', '', ''),
 (199, 'Dr. Sam', 15, 'completed', '2025-04-02', '2025-03-18', 'https://www.ekwaservice.com/support/staff/index.php?/Tickets/Ticket/View/1550137/inbox/159/297/-1', 'https://www.ekwaservice.com/support/staff/index.php?/Tickets/Ticket/View/1550137/inbox/159/297/-1', 'https://www.emp-management.net/', 'https://www.emp-management.net/', '2025-03-09 07:30:47', '2025-03-09 07:33:51', '', ''),
 (200, 'Dr. Sandy', 15, 'completed', '2025-03-08', '2025-03-03', 'https://www.ekwaservice.com/support/staff/index.php?/Tickets/Ticket/View/1550137/inbox/159/297/-1', 'https://www.ekwaservice.com/support/staff/index.php?/Tickets/Ticket/View/1550137/inbox/159/297/-1', 'https://www.emp-management.net/', 'https://www.emp-management.net/', '2025-03-09 07:43:43', '2025-03-09 09:04:58', '', ''),
-(201, 'Dr. Sameera', 15, 'wp_conversion', '2025-04-02', '2025-03-18', 'https://www.ekwaservice.com/support/staff/index.php?/Tickets/Ticket/View/1550137/inbox/159/297/-1', 'https://www.ekwaservice.com/support/staff/index.php?/Tickets/Ticket/View/1550137/inbox/159/297/-1', '', '', '2025-03-09 13:16:56', '2025-03-09 13:16:56', 'https://www.ekwaservice.com/support/staff/index.php?/Tickets/Ticket/View/1550137/inbox/159/297/-1', 'https://www.ekwaservice.com/support/staff/index.php?/Tickets/Ticket/View/1550137/inbox/159/297/-1');
+(201, 'Dr. Sameera', 11, 'page_creation_qa', '2025-04-02', '2025-03-18', 'https://www.ekwaservice.com/support/staff/index.php?/Tickets/Ticket/View/1550137/inbox/159/297/-1', 'https://www.ekwaservice.com/support/staff/index.php?/Tickets/Ticket/View/1550137/inbox/159/297/-1', 'https://www.emp-management.net/', '', '2025-03-09 13:16:56', '2025-03-09 14:21:45', 'https://www.ekwaservice.com/support/staff/index.php?/Tickets/Ticket/View/1550137/inbox/159/297/-1', 'https://www.ekwaservice.com/support/staff/index.php?/Tickets/Ticket/View/1550137/inbox/159/297/-1'),
+(202, 'Dr. Same', 14, 'wp_conversion_qa', '2025-04-02', '2025-03-18', 'https://www.ekwaservice.com/support/staff/index.php?/Tickets/Ticket/View/1550137/inbox/159/297/-1', 'https://www.ekwaservice.com/support/staff/index.php?/Tickets/Ticket/View/1550137/inbox/159/297/-1', 'https://www.emp-management.net/', '', '2025-03-09 15:00:08', '2025-03-09 15:00:29', '', '');
 
 -- --------------------------------------------------------
 
@@ -241,18 +243,30 @@ CREATE TABLE IF NOT EXISTS `project_checklist_status` (
   KEY `project_id` (`project_id`),
   KEY `checklist_item_id` (`checklist_item_id`),
   KEY `updated_by` (`updated_by`)
-) ENGINE=MyISAM AUTO_INCREMENT=1907 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=MyISAM AUTO_INCREMENT=1919 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
 -- Dumping data for table `project_checklist_status`
 --
 
 INSERT INTO `project_checklist_status` (`id`, `project_id`, `checklist_item_id`, `status`, `updated_at`, `updated_by`, `is_archived`) VALUES
-(1906, 201, 82, 'idle', '2025-03-09 13:16:56', NULL, 0),
-(1905, 201, 85, 'idle', '2025-03-09 13:16:56', NULL, 0),
+(1918, 203, 82, 'fixed', '2025-03-10 08:13:42', 15, 0),
+(1917, 203, 85, 'idle', '2025-03-10 08:13:05', NULL, 0),
+(1916, 203, 86, 'idle', '2025-03-10 08:13:05', NULL, 0),
+(1915, 203, 84, 'idle', '2025-03-10 08:13:05', NULL, 0),
+(1914, 203, 83, 'fixed', '2025-03-10 08:13:48', 15, 0),
+(1913, 203, 87, 'idle', '2025-03-10 08:13:05', NULL, 0),
+(1912, 202, 82, 'fixed', '2025-03-09 15:00:22', 14, 0),
+(1911, 202, 85, 'idle', '2025-03-09 15:00:08', NULL, 0),
+(1910, 202, 86, 'idle', '2025-03-09 15:00:08', NULL, 0),
+(1909, 202, 84, 'idle', '2025-03-09 15:00:08', NULL, 0),
+(1908, 202, 83, 'fixed', '2025-03-09 15:00:29', 14, 0),
+(1907, 202, 87, 'idle', '2025-03-09 15:00:08', NULL, 0),
+(1906, 201, 82, 'passed', '2025-03-09 14:19:32', 1, 0),
+(1905, 201, 85, 'fixed', '2025-03-09 14:21:45', 11, 0),
 (1904, 201, 86, 'idle', '2025-03-09 13:16:56', NULL, 0),
-(1903, 201, 84, 'idle', '2025-03-09 13:16:56', NULL, 0),
-(1902, 201, 83, 'idle', '2025-03-09 13:16:56', NULL, 0),
+(1903, 201, 84, 'fixed', '2025-03-09 14:21:41', 11, 0),
+(1902, 201, 83, 'passed', '2025-03-09 14:19:35', 1, 0),
 (1901, 201, 87, 'idle', '2025-03-09 13:16:56', NULL, 0),
 (1900, 200, 82, 'passed', '2025-03-09 07:59:18', 1, 0),
 (1899, 200, 85, 'passed', '2025-03-09 07:59:55', 1, 0),
@@ -302,7 +316,7 @@ CREATE TABLE IF NOT EXISTS `project_status_history` (
   PRIMARY KEY (`id`),
   KEY `project_id` (`project_id`),
   KEY `created_by` (`created_by`)
-) ENGINE=MyISAM AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=MyISAM AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
 -- Dumping data for table `project_status_history`
@@ -324,7 +338,14 @@ INSERT INTO `project_status_history` (`id`, `project_id`, `status`, `action`, `c
 (13, 200, 'page_creation_qa', 'updated', 15, '2025-03-09 07:59:39'),
 (14, 200, 'golive', 'updated', 1, '2025-03-09 07:59:55'),
 (15, 200, 'golive_qa', 'updated', 15, '2025-03-09 08:01:04'),
-(16, 200, 'completed', 'updated', 1, '2025-03-09 09:04:58');
+(16, 200, 'completed', 'updated', 1, '2025-03-09 09:04:58'),
+(17, 201, 'wp_conversion_qa', 'updated', 11, '2025-03-09 14:19:17'),
+(18, 201, 'page_creation', 'updated', 1, '2025-03-09 14:19:35'),
+(19, 201, 'page_creation_qa', 'updated', 11, '2025-03-09 14:20:00'),
+(20, 201, 'page_creation', 'updated', 1, '2025-03-09 14:21:13'),
+(21, 201, 'page_creation_qa', 'updated', 11, '2025-03-09 14:21:45'),
+(22, 202, 'wp_conversion_qa', 'updated', 14, '2025-03-09 15:00:29'),
+(23, 203, 'wp_conversion_qa', 'updated', 15, '2025-03-10 08:13:48');
 
 -- --------------------------------------------------------
 
@@ -343,7 +364,15 @@ CREATE TABLE IF NOT EXISTS `qa_assignments` (
   KEY `project_id` (`project_id`),
   KEY `qa_user_id` (`qa_user_id`),
   KEY `assigned_by` (`assigned_by`)
-) ENGINE=MyISAM AUTO_INCREMENT=67 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=MyISAM AUTO_INCREMENT=69 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `qa_assignments`
+--
+
+INSERT INTO `qa_assignments` (`id`, `project_id`, `qa_user_id`, `assigned_by`, `assigned_at`) VALUES
+(68, 202, 12, 12, '2025-03-10 07:58:30'),
+(67, 201, 1, 1, '2025-03-09 14:20:58');
 
 -- --------------------------------------------------------
 
