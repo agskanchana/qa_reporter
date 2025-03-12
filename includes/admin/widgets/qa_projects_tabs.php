@@ -1,7 +1,7 @@
 <?php
 // filepath: c:\wamp64\www\qa_reporter\includes\admin\widgets\qa_projects_tabs.php
 
-// Get WP conversion QA projects
+// Get ALL WP conversion QA projects (removed LIMIT)
 $wp_conversion_projects_query = "SELECT p.*,
                               u.username as webmaster_name,
                               qa.id as assignment_id,
@@ -11,11 +11,10 @@ $wp_conversion_projects_query = "SELECT p.*,
                               LEFT JOIN qa_assignments qa ON p.id = qa.project_id
                               LEFT JOIN users qa_user ON qa.qa_user_id = qa_user.id
                               WHERE p.current_status LIKE '%wp_conversion_qa%'
-                              ORDER BY p.created_at DESC
-                              LIMIT 10";
+                              ORDER BY p.created_at DESC";
 $wp_conversion_projects = $conn->query($wp_conversion_projects_query)->fetch_all(MYSQLI_ASSOC);
 
-// Get page creation QA projects
+// Get ALL page creation QA projects (removed LIMIT)
 $page_creation_projects_query = "SELECT p.*,
                              u.username as webmaster_name,
                              qa.id as assignment_id,
@@ -25,11 +24,10 @@ $page_creation_projects_query = "SELECT p.*,
                              LEFT JOIN qa_assignments qa ON p.id = qa.project_id
                              LEFT JOIN users qa_user ON qa.qa_user_id = qa_user.id
                              WHERE p.current_status LIKE '%page_creation_qa%'
-                             ORDER BY p.created_at DESC
-                             LIMIT 10";
+                             ORDER BY p.created_at DESC";
 $page_creation_projects = $conn->query($page_creation_projects_query)->fetch_all(MYSQLI_ASSOC);
 
-// Get golive QA projects
+// Get ALL golive QA projects (removed LIMIT)
 $golive_projects_query = "SELECT p.*,
                        u.username as webmaster_name,
                        qa.id as assignment_id,
@@ -39,8 +37,7 @@ $golive_projects_query = "SELECT p.*,
                        LEFT JOIN qa_assignments qa ON p.id = qa.project_id
                        LEFT JOIN users qa_user ON qa.qa_user_id = qa_user.id
                        WHERE p.current_status LIKE '%golive_qa%'
-                       ORDER BY p.created_at DESC
-                       LIMIT 10";
+                       ORDER BY p.created_at DESC";
 $golive_projects = $conn->query($golive_projects_query)->fetch_all(MYSQLI_ASSOC);
 ?>
 
@@ -157,14 +154,6 @@ $golive_projects = $conn->query($golive_projects_query)->fetch_all(MYSQLI_ASSOC)
                             </tbody>
                         </table>
                     </div>
-
-                    <?php if (count($wp_conversion_projects) >= 10): ?>
-                    <div class="text-center mt-3">
-                        <a href="<?php echo BASE_URL; ?>/projects.php?status=wp_conversion_qa" class="btn btn-sm btn-outline-primary">
-                            View All WP Conversion QA Projects
-                        </a>
-                    </div>
-                    <?php endif; ?>
                 <?php endif; ?>
             </div>
 
@@ -242,14 +231,6 @@ $golive_projects = $conn->query($golive_projects_query)->fetch_all(MYSQLI_ASSOC)
                             </tbody>
                         </table>
                     </div>
-
-                    <?php if (count($page_creation_projects) >= 10): ?>
-                    <div class="text-center mt-3">
-                        <a href="<?php echo BASE_URL; ?>/projects.php?status=page_creation_qa" class="btn btn-sm btn-outline-primary">
-                            View All Page Creation QA Projects
-                        </a>
-                    </div>
-                    <?php endif; ?>
                 <?php endif; ?>
             </div>
 
@@ -327,14 +308,6 @@ $golive_projects = $conn->query($golive_projects_query)->fetch_all(MYSQLI_ASSOC)
                             </tbody>
                         </table>
                     </div>
-
-                    <?php if (count($golive_projects) >= 10): ?>
-                    <div class="text-center mt-3">
-                        <a href="<?php echo BASE_URL; ?>/projects.php?status=golive_qa" class="btn btn-sm btn-outline-primary">
-                            View All Go-Live QA Projects
-                        </a>
-                    </div>
-                    <?php endif; ?>
                 <?php endif; ?>
             </div>
         </div>
