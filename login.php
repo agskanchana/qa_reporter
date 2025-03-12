@@ -92,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QA Reporter - Login</title>
+    <title>Go Live Project Manager - Login</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
     <link href="assets/css/login.css" rel="stylesheet">
@@ -103,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             <div class="col-md-6 col-lg-4">
                 <div class="card shadow-lg border-0 rounded-lg">
                     <div class="card-header bg-primary text-white text-center py-4">
-                        <h2 class="mb-0">QA Reporter</h2>
+                        <h2 class="mb-0">Go Live Project Manager</h2>
                         <p class="mb-0">Login to your account</p>
                     </div>
                     <div class="card-body p-4">

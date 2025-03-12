@@ -14,9 +14,7 @@ $webmaster_workload_query = "SELECT
                              SUM(CASE WHEN p.current_status LIKE '%golive_qa%' THEN 1 ELSE 0 END) as golive_qa,
 
                              /* Overall QA total */
-                             SUM(CASE WHEN p.current_status LIKE '%_qa%' THEN 1 ELSE 0 END) as in_qa,
-
-                             COUNT(CASE WHEN p.project_deadline < CURDATE() AND p.current_status NOT LIKE '%complete%' THEN 1 END) as overdue
+                             SUM(CASE WHEN p.current_status LIKE '%_qa%' THEN 1 ELSE 0 END) as in_qa
                              FROM users u
                              LEFT JOIN projects p ON u.id = p.webmaster_id AND p.current_status NOT LIKE '%complete%'
                              WHERE u.role = 'webmaster'
@@ -46,17 +44,16 @@ $total_active_projects = $conn->query($total_active_projects_query)->fetch_assoc
             <p class="text-muted">No webmasters with projects found</p>
         </div>
         <?php else: ?>
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
+        <!-- Modified scrolling container with fixed width columns -->
+        <div class="table-responsive" style="overflow-x: auto;">
+            <table class="table table-hover align-middle mb-0" style="min-width: 600px;">
                 <thead class="table-light">
                     <tr>
-                        <th>Webmaster</th>
-                        <th class="text-center" title="Total projects">Total</th>
-                        <th class="text-center" title="WP Conversion">WP</th>
-                        <th class="text-center" title="Page Creation">Pages</th>
-                        <th class="text-center" title="Go-Live">GoLive</th>
-                        <th class="text-center">Overdue</th>
-                        <th class="text-end">Actions</th>
+                        <th style="min-width: 150px;">Webmaster</th>
+                        <th class="text-center" style="width: 80px;" title="Total projects">Total</th>
+                        <th class="text-center" style="width: 120px;" title="WP Conversion">WP</th>
+                        <th class="text-center" style="width: 120px;" title="Page Creation">Pages</th>
+                        <th class="text-center" style="width: 120px;" title="Go-Live">GoLive</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -134,24 +131,6 @@ $total_active_projects = $conn->query($total_active_projects_query)->fetch_assoc
                             <?php else: ?>
                                 <span class="text-muted">0</span>
                             <?php endif; ?>
-                        </td>
-
-                        <td class="text-center">
-                            <?php if ($webmaster['overdue'] > 0): ?>
-                                <span class="badge bg-danger"><?php echo $webmaster['overdue']; ?></span>
-                            <?php else: ?>
-                                <span class="text-success"><i class="bi bi-check-circle"></i></span>
-                            <?php endif; ?>
-                        </td>
-                        <td class="text-end">
-                            <div class="btn-group btn-group-sm" role="group">
-                                <a href="../projects.php?webmaster_id=<?php echo $webmaster['webmaster_id']; ?>" class="btn btn-outline-primary">
-                                    <i class="bi bi-folder me-1"></i> Projects
-                                </a>
-                                <a href="../message.php?user_id=<?php echo $webmaster['webmaster_id']; ?>" class="btn btn-outline-secondary">
-                                    <i class="bi bi-chat"></i>
-                                </a>
-                            </div>
                         </td>
                     </tr>
                     <?php endforeach; ?>

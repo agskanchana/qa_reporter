@@ -150,7 +150,7 @@ foreach ($webmaster_projects as $project) {
                             <?php endif; ?>
                         </td>
                         <td class="text-center">
-                            <a href="<?php echo BASE_URL; ?>/project_details.php?id=<?php echo $project['id']; ?>" class="btn btn-sm btn-primary">
+                            <a href="<?php echo BASE_URL; ?>project_details.php?id=<?php echo $project['id']; ?>" class="btn btn-sm btn-primary">
                                 <i class="bi bi-eye"></i> View Details
                             </a>
                         </td>
