@@ -3,131 +3,6 @@
 require_once 'includes/config.php';
 
 /**
- * Check auto-assign settings and assign admin if enabled
- * @param mysqli $conn Database connection
- * @param int $project_id Project ID
- * @param string $stage The stage (wp_conversion or golive)
- * @return bool True if assigned, false otherwise
- */
-function checkAndAutoAssignAdmin($conn, $project_id, $stage) {
-    if (!in_array($stage, ['wp_conversion', 'golive'])) {
-        return false;
-    }
-
-    // Check if auto-assign is enabled for this stage
-    $setting_query = "SELECT is_enabled FROM auto_assign_to_admin WHERE setting_key = ?";
-    $stmt = $conn->prepare($setting_query);
-    $stmt->bind_param("s", $stage);
-    $stmt->execute();
-    $result = $stmt->get_result();
-
-    // If setting doesn't exist or is disabled, return false
-    if ($result->num_rows === 0) {
-        return false;
-    }
-
-    $setting = $result->fetch_assoc();
-    if (!(bool)$setting['is_enabled']) {
-        return false;
-    }
-
-    // Get admin user ID
-    $admin_query = "SELECT id FROM users WHERE role = 'admin' LIMIT 1";
-    $admin_result = $conn->query($admin_query);
-
-    if ($admin_result->num_rows === 0) {
-        return false; // No admin found
-    }
-
-    $admin_id = $admin_result->fetch_assoc()['id'];
-
-    // Check if project is already assigned
-    $assignment_query = "SELECT id, qa_user_id FROM qa_assignments WHERE project_id = ?";
-    $stmt = $conn->prepare($assignment_query);
-    $stmt->bind_param("i", $project_id);
-    $stmt->execute();
-    $assignment_result = $stmt->get_result();
-
-    if ($assignment_result->num_rows > 0) {
-        // Project already has a QA assignment
-        $assignment = $assignment_result->fetch_assoc();
-
-        // If already assigned to admin, do nothing
-        if ($assignment['qa_user_id'] == $admin_id) {
-            return true;
-        }
-
-        // Update the assignment to admin
-        $update_stmt = $conn->prepare("UPDATE qa_assignments SET qa_user_id = ?, assigned_by = ?, assigned_at = NOW() WHERE id = ?");
-        $update_stmt->bind_param("iii", $admin_id, $admin_id, $assignment['id']);
-        $update_stmt->execute();
-    } else {
-        // Create new assignment to admin
-        $insert_stmt = $conn->prepare("INSERT INTO qa_assignments (project_id, qa_user_id, assigned_by, assigned_at)
-                                     VALUES (?, ?, ?, NOW())");
-        $insert_stmt->bind_param("iii", $project_id, $admin_id, $admin_id);
-        $insert_stmt->execute();
-    }
-
-    // Add record to project_status_history
-    $action = "Auto-assigned to admin for " . ($stage === 'wp_conversion' ? 'WP Conversion' : 'Go-Live') . " QA";
-    $status = "qa_assignment";
-    $history_stmt = $conn->prepare("INSERT INTO project_status_history (project_id, status, action, created_by, created_at)
-                                   VALUES (?, ?, ?, ?, NOW())");
-    $history_stmt->bind_param("issi", $project_id, $status, $action, $admin_id);
-    $history_stmt->execute();
-
-    // Create notification for admin
-    $project_stmt = $conn->prepare("SELECT name FROM projects WHERE id = ?");
-    $project_stmt->bind_param("i", $project_id);
-    $project_stmt->execute();
-    $project_result = $project_stmt->get_result();
-
-    if ($project_result->num_rows > 0) {
-        $project_name = $project_result->fetch_assoc()['name'];
-        $notification_message = "You have been automatically assigned to QA project: " . $project_name .
-                              " (" . ($stage === 'wp_conversion' ? 'WP Conversion' : 'Go-Live') . " stage)";
-
-        $notification_stmt = $conn->prepare("INSERT INTO notifications (user_id, type, message, created_at, is_read)
-                                           VALUES (?, 'info', ?, NOW(), 0)");
-        $notification_stmt->bind_param("is", $admin_id, $notification_message);
-        $notification_stmt->execute();
-    }
-
-    return true;
-}
-
-/**
- * Remove QA assignment for a project
- * @param mysqli $conn Database connection
- * @param int $project_id Project ID
- * @return bool True if removed, false otherwise
- */
-function removeQaAssignment($conn, $project_id) {
-    $stmt = $conn->prepare("DELETE FROM qa_assignments WHERE project_id = ?");
-    $stmt->bind_param("i", $project_id);
-    $result = $stmt->execute();
-
-    if ($result) {
-        // Add record to project_status_history
-        $admin_query = "SELECT id FROM users WHERE role = 'admin' LIMIT 1";
-        $admin_result = $conn->query($admin_query);
-        $admin_id = ($admin_result->num_rows > 0) ? $admin_result->fetch_assoc()['id'] : null;
-
-        if ($admin_id) {
-            $action = "QA assignment removed automatically";
-            $status = "qa_unassignment";
-            $history_stmt = $conn->prepare("INSERT INTO project_status_history (project_id, status, action, created_by, created_at)
-                                           VALUES (?, ?, ?, ?, NOW())");
-            $history_stmt->bind_param("issi", $project_id, $status, $action, $admin_id);
-            $history_stmt->execute();
-        }
-    }
-
-    return $result;
-}
-
-/**
  * Record project status changes in history table
  * @param mysqli $conn Database connection
  * @param int $project_id Project ID
@@ -285,13 +160,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $show_test_site_prompt = false;
             $show_live_site_prompt = false;
 
-            // Variables to track status transitions
-            $was_wp_qa = in_array('wp_conversion_qa', $current_statuses);
-            $was_golive_qa = in_array('golive_qa', $current_statuses);
-            $new_wp_qa = false;
-            $new_golive_qa = false;
-            $new_page_creation = false;
-
             // Check if this checklist item is in wp_conversion stage and is being marked as fixed
             if ($current_stage === 'wp_conversion' && $new_status === 'fixed') {
                 // Check if the test_site_link is empty
@@ -338,13 +206,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         // Add QA status if not present
                         if (!in_array($qa_status, $new_statuses)) {
                             $new_statuses[] = $qa_status;
-
-                            // Track if we're transitioning to WP QA or Golive QA
-                            if ($stage === 'wp_conversion') {
-                                $new_wp_qa = true;
-                            } else if ($stage === 'golive') {
-                                $new_golive_qa = true;
-                            }
                         }
                     }
                 }
@@ -367,25 +228,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt->bind_param("si", $new_project_status, $project_id);
             $stmt->execute();
 
-            // Auto-assign admin if we're transitioning to WP QA and it wasn't in WP QA before
-            if ($new_wp_qa && !$was_wp_qa) {
-                checkAndAutoAssignAdmin($conn, $project_id, 'wp_conversion');
-            }
-
-            // Auto-assign admin if we're transitioning to Golive QA and it wasn't in Golive QA before
-            if ($new_golive_qa && !$was_golive_qa) {
-                checkAndAutoAssignAdmin($conn, $project_id, 'golive');
-            }
-
         } else if (in_array($user_role, ['qa_reporter', 'qa_manager', 'admin'])) {
             $all_items_reviewed = ($status_counts['passed_count'] + $status_counts['failed_count']) == $status_counts['total'];
 
             if ($all_items_reviewed) {
                 $current_statuses = !empty($current_project_status) ? explode(',', $current_project_status) : [];
-
-                // Variables to track status transitions
-                $was_wp_qa = in_array('wp_conversion_qa', $current_statuses);
-                $moving_to_page_creation = false;
 
                 if ($status_counts['failed_count'] > 0) {
                     // Remove QA status for current stage if any items failed
@@ -409,7 +256,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         // Add page_creation if not in page_creation_qa
                         if (!in_array('page_creation_qa', $current_statuses)) {
                             $current_statuses[] = 'page_creation';
-                            $moving_to_page_creation = true;
                         }
                     } else if ($current_stage === 'page_creation') {
                         // Remove page_creation statuses
@@ -453,14 +299,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     recordProjectStatusHistory($conn, $project_id, explode(',', $current_project_status), $current_statuses, $_SESSION['user_id']);
 
                     $update_project = "UPDATE projects SET current_status = ? WHERE id = ?";
-                    $stmt->prepare($update_project);
+                    $stmt = $conn->prepare($update_project);
                     $stmt->bind_param("si", $new_project_status, $project_id);
                     $stmt->execute();
-
-                    // If transitioning from WP QA to page_creation, remove QA assignment
-                    if ($was_wp_qa && $moving_to_page_creation) {
-                        removeQaAssignment($conn, $project_id);
-                    }
                 }
             }
         }

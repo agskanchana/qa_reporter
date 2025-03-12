@@ -3,42 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo isset($page_title) ? htmlspecialchars($page_title) : 'QA Reporter'; ?></title>
+    <title>Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
     <base href="<?php echo BASE_URL; ?>">
     <link rel="icon" href="<?php echo BASE_URL; ?>/images/favicon.ico">
-    <link rel="stylesheet" href="<?php echo BASE_URL; ?>/assets/css/style.css">
 </head>
 <body>
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container-fluid">
+
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
-                    <!-- Dashboard - accessible to all users -->
                     <li class="nav-item">
-                        <a class="nav-link" href="<?php echo url(); ?>">Dashboard</a>
+                        <a class="nav-link" href="<?php echo url('dashboard.php'); ?>">Dashboard</a>
                     </li>
-
-                    <!-- Projects - admin only -->
-                    <?php if ($user_role === 'admin'): ?>
+                    <?php if (in_array($user_role, ['admin', 'qa_manager'])): ?>
                     <li class="nav-item">
                         <a class="nav-link" href="<?php echo url('projects.php'); ?>">Projects</a>
                     </li>
-                    <?php endif; ?>
-
-                    <!-- Users - admin only -->
-                    <?php if ($user_role === 'admin'): ?>
-                    <li class="nav-item">
+                        <li class="nav-item">
                         <a class="nav-link" href="<?php echo url('users.php'); ?>">Users</a>
                     </li>
-                    <?php endif; ?>
-
-                    <!-- Reports - admin only -->
-                    <?php if ($user_role === 'admin'): ?>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="reportsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             Reports
@@ -48,29 +37,41 @@
                             <li><a class="dropdown-item" href="<?php echo url('current_projects.php'); ?>">Current Projects</a></li>
                         </ul>
                     </li>
-                    <?php endif; ?>
-
-                    <!-- Checklist - admin and qa_manager -->
-                    <?php if (in_array($user_role, ['admin', 'qa_manager'])): ?>
                     <li class="nav-item">
-                        <a class="nav-link" href="<?php echo url('manage_checklist.php'); ?>">Checklist</a>
+                        <a class="nav-link " href="<?php echo url('manage_checklist.php'); ?>">Checklist</a>
                     </li>
+
+                    <!-- Add this somewhere in the header navigation for admin users -->
+                    <?php if (getUserRole() === 'admin'): ?>
+                    <!-- <li class="nav-item">
+                        <?php
+                        // Create a separate connection for the pending count query
+                        $pending_conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+
+                        // Get count of pending extension requests
+                        $pending_count_query = "SELECT COUNT(*) as count FROM deadline_extension_requests WHERE status = 'pending'";
+                        $pending_count_result = $pending_conn->query($pending_count_query);
+                        $pending_count = $pending_count_result ? $pending_count_result->fetch_assoc()['count'] : 0;
+                        $pending_conn->close();
+                        ?>
+                        <a class="nav-link" href="deadline_requests.php">
+                            Deadline Requests
+                            <?php if ($pending_count > 0): ?>
+                                <span class="badge bg-warning"><?php echo $pending_count; ?></span>
+                            <?php endif; ?>
+                        </a>
+                    </li> -->
+                    <?php endif; ?>
                     <?php endif; ?>
                 </ul>
-
                 <div class="navbar-nav">
-                    <!-- Auto-update - admin only -->
-                    <?php if ($user_role === 'admin'): ?>
-                    <a class="nav-link auto-update" href="<?php echo url('admin/check_update.php'); ?>">
-                        <i class="bi bi-cloud-download"></i>
-                    </a>
-                    <?php endif; ?>
-
+                <a class="nav-link" href="<?php echo url('admin/check_update.php'); ?>">
+                            <i class="bi bi-cloud-download"></i>
+                        </a>
                     <span class="nav-item nav-link text-light">Welcome, <?php echo htmlspecialchars($_SESSION['username']); ?></span>
                     <a class="nav-link" href="<?php echo url('logout.php'); ?>">Logout</a>
                 </div>
-
-                <!-- Notifications dropdown -->
+                <!-- Add this to your header.php, just before the closing </div> of .navbar-nav -->
                 <?php
                 // Create a new connection just for notifications to avoid sync issues
                 $notifications_conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
@@ -162,3 +163,5 @@
             </div>
         </div>
     </nav>
+</body>
+</html>

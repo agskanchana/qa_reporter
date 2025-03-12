@@ -192,6 +192,29 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <title>Manage Projects - QA Reporter</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Add this to the head section for improved styling -->
+    <style>
+        .project-actions {
+            white-space: nowrap;
+        }
+
+        .project-table th {
+            position: sticky;
+            top: 0;
+            background-color: #fff;
+            z-index: 1;
+        }
+
+        .modal-lg {
+            max-width: 800px;
+        }
+
+        @media (max-width: 767px) {
+            .table-responsive {
+                max-height: 70vh;
+            }
+        }
+    </style>
 </head>
 <body>
     <?php include 'includes/header.php'; ?>
@@ -205,139 +228,80 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             <div class="alert alert-success"><?php echo $success; ?></div>
         <?php endif; ?>
 
-        <div class="container mt-4">
-            <?php if (isset($_SESSION['error'])): ?>
-                <div class="alert alert-danger"><?php echo $_SESSION['error']; ?></div>
-                <?php unset($_SESSION['error']); ?>
-            <?php endif; ?>
-
-            <?php if (isset($_SESSION['success'])): ?>
-                <div class="alert alert-success"><?php echo $_SESSION['success']; ?></div>
-                <?php unset($_SESSION['success']); ?>
-            <?php endif; ?>
-
-            <!-- ...rest of your existing HTML... -->
-        </div>
-
-        <div class="card mb-4">
-            <div class="card-header">
-                <h4>Add New Project</h4>
-            </div>
-            <div class="card-body">
-                <form method="POST">
-                    <input type="hidden" name="action" value="add">
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="project_name" class="form-label">Project Name</label>
-                            <input type="text" class="form-control" id="project_name" name="project_name" required>
-                            <!-- Feedback will be inserted here by JavaScript -->
-                        </div>
-
-                        <div class="col-md-6 mb-3">
-                            <label for="webmaster_id" class="form-label">Assign Webmaster</label>
-                            <select class="form-select" id="webmaster_id" name="webmaster_id" required>
-                                <option value="">Select Webmaster</option>
-                                <?php
-                                $webmasters->data_seek(0);
-                                while ($webmaster = $webmasters->fetch_assoc()):
-                                ?>
-                                    <option value="<?php echo $webmaster['id']; ?>">
-                                        <?php echo htmlspecialchars($webmaster['username']); ?>
-                                    </option>
-                                <?php endwhile; ?>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="project_deadline" class="form-label">Project Deadline</label>
-                            <input type="date" class="form-control" id="project_deadline" name="project_deadline" required>
-                        </div>
-
-                        <div class="col-md-6 mb-3">
-                            <label for="wp_conversion_deadline" class="form-label">WP Conversion Deadline</label>
-                            <input type="date" class="form-control" id="wp_conversion_deadline" name="wp_conversion_deadline" required>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="gp_link" class="form-label">GP Link (Google Spreadsheet)</label>
-                            <input type="url" class="form-control" id="gp_link" name="gp_link" placeholder="https://docs.google.com/spreadsheets/..." required>
-                        </div>
-
-                        <div class="col-md-6 mb-3">
-                            <label for="ticket_link" class="form-label">Ticket Link</label>
-                            <input type="url" class="form-control" id="ticket_link" name="ticket_link" placeholder="https://..." required>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="test_site_link" class="form-label">Test Site Link <span class="text-muted">(optional)</span></label>
-                            <input type="url" class="form-control" id="test_site_link" name="test_site_link" placeholder="https://...">
-                        </div>
-
-                        <div class="col-md-6 mb-3">
-                            <label for="live_site_link" class="form-label">Live Site Link <span class="text-muted">(optional)</span></label>
-                            <input type="url" class="form-control" id="live_site_link" name="live_site_link" placeholder="https://...">
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="admin_notes" class="form-label">Notes by Admin</label>
-                            <textarea class="form-control" id="admin_notes" name="admin_notes" rows="3"></textarea>
-                        </div>
-
-                        <div class="col-md-6 mb-3">
-                            <label for="webmaster_notes" class="form-label">Notes by Webmaster</label>
-                            <textarea class="form-control" id="webmaster_notes" name="webmaster_notes" rows="3"
-                                     <?php echo $user_role !== 'admin' ? 'readonly' : ''; ?>></textarea>
-                        </div>
-                    </div>
-
-                    <button type="submit" class="btn btn-primary">Create Project</button>
-                </form>
-            </div>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>Project Management</h2>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createProjectModal">
+                <i class="bi bi-plus-circle"></i> Create New Project
+            </button>
         </div>
 
         <div class="card">
-            <div class="card-header">
-                <h4>Project List</h4>
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">Project List</h4>
+                <span class="badge bg-primary"><?php echo $total_projects; ?> Total Projects</span>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table table-striped">
+                    <table class="table table-striped table-hover project-table">
                         <thead>
                             <tr>
                                 <th>Project Name</th>
                                 <th>Webmaster</th>
                                 <th>Status</th>
                                 <th>Created At</th>
-                                <th>Actions</th>
+                                <th class="text-end">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php while ($project = $projects->fetch_assoc()): ?>
                             <tr>
-                                <td><?php echo htmlspecialchars($project['name']); ?></td>
+                                <td>
+                                    <a href="project_details.php?id=<?php echo $project['id']; ?>">
+                                        <?php echo htmlspecialchars($project['name']); ?>
+                                    </a>
+                                </td>
                                 <td><?php
                                 if($project['webmaster_name'] == null){
-                                    echo '<span class="badge bg-danger">
-                                                Deleted User</span>';
+                                    echo '<span class="badge bg-danger">Deleted User</span>';
                                 }else{
-                                echo htmlspecialchars($project['webmaster_name']);
+                                    echo htmlspecialchars($project['webmaster_name']);
                                 }
                                  ?></td>
                                 <td>
-                                    <span class="badge bg-primary">
-                                        <?php echo ucfirst(str_replace('_', ' ', $project['current_status'])); ?>
-                                    </span>
+                                    <?php
+                                    $statuses = !empty($project['current_status']) ? explode(',', $project['current_status']) : [];
+                                    if (empty($statuses)): ?>
+                                        <span class="badge bg-secondary">No Status</span>
+                                    <?php else:
+                                        foreach ($statuses as $status):
+                                            // Determine badge color based on status
+                                            $badge_class = 'secondary'; // Default value
+                                            if (strpos($status, 'wp_conversion') !== false) {
+                                                $badge_class = 'info';
+                                            } elseif (strpos($status, 'page_creation') !== false) {
+                                                $badge_class = 'warning';
+                                            } elseif (strpos($status, 'golive') !== false) {
+                                                $badge_class = 'success';
+                                            } elseif ($status === 'completed') {
+                                                $badge_class = 'primary';
+                                            }
+                                    ?>
+                                        <span class="badge bg-<?php echo $badge_class; ?> me-1">
+                                            <?php echo ucwords(str_replace('_', ' ', $status)); ?>
+                                        </span>
+                                    <?php
+                                        endforeach;
+                                    endif;
+                                    ?>
                                 </td>
-                                <td><?php echo date('Y-m-d H:i:s', strtotime($project['created_at'])); ?></td>
-                                <td>
+                                <td><?php echo date('Y-m-d', strtotime($project['created_at'])); ?></td>
+                                <td class="text-end project-actions">
+                                    <!-- <a href="view_project.php?id=<?php echo $project['id']; ?>" class="btn btn-sm btn-info">
+                                        <i class="bi bi-eye"></i> View
+                                    </a> -->
+                                    <a href="project_details.php?id=<?php echo $project['id']; ?>" class="btn btn-sm btn-info">
+                                        <i class="bi bi-file-earmark-text"></i> Details
+                                    </a>
                                     <button class="btn btn-sm btn-warning"
                                             onclick="editProject(<?php echo htmlspecialchars(json_encode($project)); ?>)">
                                         <i class="bi bi-pencil"></i> Edit
@@ -377,6 +341,98 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     </ul>
                 </nav>
                 <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Project Modal -->
+    <div class="modal fade" id="createProjectModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New Project</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST">
+                    <div class="modal-body">
+                        <input type="hidden" name="action" value="add">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="project_name" class="form-label">Project Name</label>
+                                <input type="text" class="form-control" id="project_name" name="project_name" required>
+                                <!-- Feedback will be inserted here by JavaScript -->
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="webmaster_id" class="form-label">Assign Webmaster</label>
+                                <select class="form-select" id="webmaster_id" name="webmaster_id" required>
+                                    <option value="">Select Webmaster</option>
+                                    <?php
+                                    $webmasters->data_seek(0);
+                                    while ($webmaster = $webmasters->fetch_assoc()):
+                                    ?>
+                                        <option value="<?php echo $webmaster['id']; ?>">
+                                            <?php echo htmlspecialchars($webmaster['username']); ?>
+                                        </option>
+                                    <?php endwhile; ?>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="project_deadline" class="form-label">Project Deadline</label>
+                                <input type="date" class="form-control" id="project_deadline" name="project_deadline" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="wp_conversion_deadline" class="form-label">WP Conversion Deadline</label>
+                                <input type="date" class="form-control" id="wp_conversion_deadline" name="wp_conversion_deadline" required>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="gp_link" class="form-label">GP Link (Google Spreadsheet)</label>
+                                <input type="url" class="form-control" id="gp_link" name="gp_link" placeholder="https://docs.google.com/spreadsheets/..." required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="ticket_link" class="form-label">Ticket Link</label>
+                                <input type="url" class="form-control" id="ticket_link" name="ticket_link" placeholder="https://..." required>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="test_site_link" class="form-label">Test Site Link <span class="text-muted">(optional)</span></label>
+                                <input type="url" class="form-control" id="test_site_link" name="test_site_link" placeholder="https://...">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="live_site_link" class="form-label">Live Site Link <span class="text-muted">(optional)</span></label>
+                                <input type="url" class="form-control" id="live_site_link" name="live_site_link" placeholder="https://...">
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="admin_notes" class="form-label">Notes by Admin</label>
+                                <textarea class="form-control" id="admin_notes" name="admin_notes" rows="3"></textarea>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="webmaster_notes" class="form-label">Notes by Webmaster</label>
+                                <textarea class="form-control" id="webmaster_notes" name="webmaster_notes" rows="3"
+                                         <?php echo $user_role !== 'admin' ? 'readonly' : ''; ?>></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="createProjectBtn">Create Project</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -513,51 +569,83 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         new bootstrap.Modal(document.getElementById('editProjectModal')).show();
     }
 
-    // Add this inside the <script> tags in projects.php
+    // Replace the existing document.addEventListener for project name validation with this one
     document.addEventListener('DOMContentLoaded', function() {
         const projectNameInput = document.getElementById('project_name');
-        const createProjectButton = document.querySelector('button[type="submit"]');
+        const createProjectButton = document.getElementById('createProjectBtn');
         let timeoutId;
 
-        projectNameInput.addEventListener('input', function() {
-            clearTimeout(timeoutId);
-            const projectName = this.value;
+        if (projectNameInput) {
+            projectNameInput.addEventListener('input', function() {
+                clearTimeout(timeoutId);
+                const projectName = this.value;
 
-            // Remove any existing feedback
-            this.classList.remove('is-invalid', 'is-valid');
-            const existingFeedback = this.nextElementSibling;
-            if (existingFeedback && existingFeedback.classList.contains('invalid-feedback')) {
-                existingFeedback.remove();
-            }
+                // Remove any existing feedback
+                this.classList.remove('is-invalid', 'is-valid');
+                const existingFeedback = this.nextElementSibling;
+                if (existingFeedback && existingFeedback.classList.contains('invalid-feedback')) {
+                    existingFeedback.remove();
+                }
 
-            if (projectName.length > 0) {
-                timeoutId = setTimeout(() => {
-                    fetch('check_project_name.php', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                        },
-                        body: 'project_name=' + encodeURIComponent(projectName)
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.exists) {
-                            projectNameInput.classList.add('is-invalid');
-                            createProjectButton.disabled = true;
+                if (projectName.length > 0) {
+                    timeoutId = setTimeout(() => {
+                        fetch('check_project_name.php', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                            },
+                            body: 'project_name=' + encodeURIComponent(projectName)
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.exists) {
+                                projectNameInput.classList.add('is-invalid');
+                                createProjectButton.disabled = true;
 
-                            // Add invalid feedback
-                            const feedback = document.createElement('div');
-                            feedback.classList.add('invalid-feedback');
-                            feedback.textContent = 'This project name already exists!';
-                            projectNameInput.parentNode.appendChild(feedback);
-                        } else {
-                            projectNameInput.classList.add('is-valid');
-                            createProjectButton.disabled = false;
-                        }
+                                // Add invalid feedback
+                                const feedback = document.createElement('div');
+                                feedback.classList.add('invalid-feedback');
+                                feedback.textContent = 'This project name already exists!';
+                                projectNameInput.parentNode.appendChild(feedback);
+                            } else {
+                                projectNameInput.classList.add('is-valid');
+                                createProjectButton.disabled = false;
+                            }
+                        });
+                    }, 500); // Delay of 500ms to prevent too many requests
+                }
+            });
+        }
+
+        // Modal event handlers to reset form when closing
+        const createProjectModal = document.getElementById('createProjectModal');
+        if (createProjectModal) {
+            createProjectModal.addEventListener('hidden.bs.modal', function () {
+                // Reset form when modal is closed
+                const form = this.querySelector('form');
+                if (form) {
+                    form.reset();
+
+                    // Reset validation state
+                    const inputs = form.querySelectorAll('.is-invalid, .is-valid');
+                    inputs.forEach(input => {
+                        input.classList.remove('is-invalid', 'is-valid');
                     });
-                }, 500); // Delay of 500ms to prevent too many requests
-            }
-        });
+
+                    // Enable submit button
+                    const submitBtn = form.querySelector('button[type="submit"]');
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                    }
+
+                    // Remove feedback messages
+                    const feedbacks = form.querySelectorAll('.invalid-feedback, .valid-feedback');
+                    feedbacks.forEach(feedback => {
+                        feedback.remove();
+                    });
+                }
+            });
+        }
     });
 
     // Update the document.addEventListener block that handles date fields

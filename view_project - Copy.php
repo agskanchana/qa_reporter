@@ -14,11 +14,7 @@ $user_role = getUserRole();
 $query = "SELECT p.*, u.username as webmaster_name,
           COALESCE(p.current_status, 'wp_conversion') as current_status,
           p.project_deadline,
-          p.wp_conversion_deadline,
-          p.ticket_link,
-          p.gp_link,
-          p.test_site_link AS test_site_url,
-          p.live_site_link AS live_site_url
+          p.wp_conversion_deadline
           FROM projects p
           LEFT JOIN users u ON p.webmaster_id = u.id
           WHERE p.id = ?";
@@ -557,70 +553,6 @@ if (!empty($project_deadline)) {
 ?>
                     </div>
                 </div>
-
-                <!-- Project Links Section (Compact Version) -->
-                <div class="row mt-3">
-                    <div class="col-md-12">
-                        <div class="d-flex flex-wrap">
-                            <!-- Ticket Link -->
-                            <div class="me-4 mb-2">
-                                <i class="bi bi-ticket-detailed text-primary"></i>
-                                <?php if (!empty($project['ticket_link'])): ?>
-                                    <a href="<?php echo htmlspecialchars($project['ticket_link']); ?>" target="_blank" class="ms-1" title="<?php echo htmlspecialchars($project['ticket_link']); ?>">
-                                        Ticket Link
-                                    </a>
-                                <?php else: ?>
-                                    <span class="text-muted ms-1">No Ticket Link</span>
-                                <?php endif; ?>
-                            </div>
-
-                            <!-- Test Site Link -->
-                            <div class="me-4 mb-2">
-                                <i class="bi bi-browser-chrome text-success"></i>
-                                <?php if (!empty($project['test_site_link'])): ?>
-                                    <a href="<?php echo htmlspecialchars($project['test_site_link']); ?>" target="_blank" class="ms-1" title="<?php echo htmlspecialchars($project['test_site_link']); ?>">
-                                        Test Site
-                                    </a>
-                                <?php else: ?>
-                                    <span class="text-muted ms-1">No Test Site</span>
-                                <?php endif; ?>
-                            </div>
-
-                            <!-- GP Link -->
-                            <div class="me-4 mb-2">
-                                <i class="bi bi-link-45deg text-info"></i>
-                                <?php if (!empty($project['gp_link'])): ?>
-                                    <a href="<?php echo htmlspecialchars($project['gp_link']); ?>" target="_blank" class="ms-1" title="<?php echo htmlspecialchars($project['gp_link']); ?>">
-                                        GP Link
-                                    </a>
-                                <?php else: ?>
-                                    <span class="text-muted ms-1">No GP Link</span>
-                                <?php endif; ?>
-                            </div>
-
-                            <!-- Live Site Link -->
-                            <div class="mb-2">
-                                <i class="bi bi-globe text-warning"></i>
-                                <?php if (!empty($project['live_site_link'])): ?>
-                                    <a href="<?php echo htmlspecialchars($project['live_site_link']); ?>" target="_blank" class="ms-1" title="<?php echo htmlspecialchars($project['live_site_link']); ?>">
-                                        Live Site
-                                    </a>
-                                <?php else: ?>
-                                    <span class="text-muted ms-1">No Live Site</span>
-                                <?php endif; ?>
-                            </div>
-
-                            <!-- Edit Links Button (for webmaster and admin) -->
-                            <?php if ($user_role === 'admin' || ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id'])): ?>
-                            <div class="ms-auto">
-                                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editLinksModal">
-                                    <i class="bi bi-pencil-square"></i> Edit Links
-                                </button>
-                            </div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
@@ -904,53 +836,6 @@ $current_user = $current_user_result->fetch_assoc();
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-primary">Save Notes</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-<?php endif; ?>
-
-<!-- Project Links Edit Modal -->
-<?php if ($user_role === 'admin' || ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id'])): ?>
-<div class="modal fade" id="editLinksModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Edit Project Links</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form method="POST" action="update_project_links.php">
-                <div class="modal-body">
-                    <input type="hidden" name="project_id" value="<?php echo $project_id; ?>">
-
-                    <div class="mb-3">
-                        <label for="ticket_link" class="form-label">Ticket Link</label>
-                        <input type="url" class="form-control" id="ticket_link" name="ticket_link"
-                               value="<?php echo htmlspecialchars($project['ticket_link'] ?? ''); ?>">
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="test_site_link" class="form-label">Test Site Link</label>
-                        <input type="url" class="form-control" id="test_site_link" name="test_site_link"
-                               value="<?php echo htmlspecialchars($project['test_site_link'] ?? ''); ?>">
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="gp_link" class="form-label">GP Link</label>
-                        <input type="url" class="form-control" id="gp_link" name="gp_link"
-                               value="<?php echo htmlspecialchars($project['gp_link'] ?? ''); ?>">
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="live_site_link" class="form-label">Live Site Link</label>
-                        <input type="url" class="form-control" id="live_site_link" name="live_site_link"
-                               value="<?php echo htmlspecialchars($project['live_site_link'] ?? ''); ?>">
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Links</button>
                 </div>
             </form>
         </div>
