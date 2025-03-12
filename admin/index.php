@@ -160,11 +160,11 @@ include_once '../includes/header.php';
         </div>
     <?php endif; ?>
 
-    <div class="row">
+    <!-- <div class="row">
         <div class="col-12">
             <h1 class="mb-4">Admin Dashboard</h1>
         </div>
-    </div>
+    </div> -->
 
     <!-- Stats Cards -->
     <?php include_once '../includes/admin/widgets/stats_cards.php'; ?>
@@ -178,13 +178,16 @@ include_once '../includes/header.php';
             <!-- Unassigned Projects Widget -->
             <?php include_once '../includes/admin/widgets/unassigned_projects.php'; ?>
 
-            <!-- NEW: Webmaster Workload Widget -->
+            <!-- Auto Assign Settings Widget -->
+            <?php include_once '../includes/admin/widgets/auto_assign_settings.php'; ?>
+
+            <!-- Webmaster Workload Widget -->
             <?php include_once '../includes/admin/widgets/webmaster_workload.php'; ?>
         </div>
 
         <!-- Right Column -->
         <div class="col-md-8">
-            <!-- Webmaster Projects Widget - NEW -->
+            <!-- Webmaster Projects Widget -->
             <?php include_once '../includes/admin/widgets/webmaster_projects.php'; ?>
 
             <!-- QA Projects Tabs Widget -->

@@ -1,8 +1,9 @@
 <?php
+// filepath: c:\wamp64\www\qa_reporter\admin\index.php
 require_once '../includes/config.php';
 require_once '../includes/functions.php';
 
-// Check if user is logged in and has qa_manager role
+// Check if user is logged in and has admin role
 if (!isLoggedIn()) {
     header("Location: ../login.php");
     exit();
@@ -11,12 +12,12 @@ if (!isLoggedIn()) {
 $user_role = getUserRole();
 $user_id = $_SESSION['user_id'];
 
-// Only allow qa_manager access to this page
-if ($user_role !== 'qa_manager') {
+// Only allow admin access to this page
+if ($user_role !== 'admin') {
     // Redirect to appropriate dashboard based on role
     switch ($user_role) {
-        case 'admin':
-            header("Location: ../admin/index.php");
+        case 'qa_manager':
+            header("Location: qa_manager/index.php");
             break;
         case 'qa_reporter':
             header("Location: ../qa_reporter/index.php");
@@ -31,7 +32,7 @@ if ($user_role !== 'qa_manager') {
     exit();
 }
 
-// Handle QA Assignment
+// Handle QA Assignment - Modified to use the same logic as dashboard.php
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['assign_qa']) && isset($_POST['project_id']) && isset($_POST['qa_user_id'])) {
         // Get the submitted data
@@ -54,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $project = $project_result->fetch_assoc();
 
                 // Check if the QA user exists and has correct role
-                $user_check_stmt = $conn->prepare("SELECT id, username, role FROM users WHERE id = ? AND role IN ('qa_reporter', 'qa_manager')");
+                $user_check_stmt = $conn->prepare("SELECT id, username, role FROM users WHERE id = ? AND role IN ('qa_reporter', 'qa_manager', 'admin')");
                 $user_check_stmt->bind_param("i", $qa_user_id);
                 $user_check_stmt->execute();
                 $user_result = $user_check_stmt->get_result();
@@ -81,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $stmt->bind_param("iii", $qa_user_id, $user_id, $assignment_id);
                             $stmt->execute();
 
-                            // Add to project status history
+                            // Add to project status history instead of project_history
                             $action = "QA Reporter reassigned to " . $qa_user['username'];
                             $status = "qa_assignment";
                             $history_stmt = $conn->prepare("INSERT INTO project_status_history (project_id, status, action, created_by, created_at) VALUES (?, ?, ?, ?, NOW())");
@@ -95,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $stmt->bind_param("iii", $project_id, $qa_user_id, $user_id);
                             $stmt->execute();
 
-                            // Add to project status history
+                            // Add to project status history instead of project_history
                             $action = "QA Reporter assigned to " . $qa_user['username'];
                             $status = "qa_assignment";
                             $history_stmt = $conn->prepare("INSERT INTO project_status_history (project_id, status, action, created_by, created_at) VALUES (?, ?, ?, ?, NOW())");
@@ -111,8 +112,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         // Create notification for the QA user
                         $notification_stmt = $conn->prepare("INSERT INTO notifications (user_id, type, message, created_at, is_read)
                                 VALUES (?, 'info', ?, NOW(), 0)");
-                        $notification_content = "You have been assigned to QA project: " . $project['name'];
                         $notification_stmt->bind_param("is", $qa_user_id, $notification_content);
+                        $notification_content = "You have been assigned to QA project: " . $project['name'];
                         $notification_stmt->execute();
 
                     } catch (Exception $e) {
@@ -132,30 +133,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Get all QA reporters for assignment dropdown
 $qa_reporters = [];
-$stmt = $conn->prepare("SELECT id, username FROM users WHERE role IN ('qa_reporter', 'qa_manager') ORDER BY username");
+$stmt = $conn->prepare("SELECT id, username FROM users WHERE role IN ('qa_reporter', 'qa_manager', 'admin') ORDER BY username");
 $stmt->execute();
 $result = $stmt->get_result();
 while ($row = $result->fetch_assoc()) {
     $qa_reporters[] = $row;
 }
 
-// Get auto-assign settings
-$auto_assign_wp = false;
-$auto_assign_golive = false;
-
-$auto_assign_query = "SELECT setting_key, is_enabled FROM auto_assign_to_admin";
-$auto_assign_result = $conn->query($auto_assign_query);
-if ($auto_assign_result && $auto_assign_result->num_rows > 0) {
-    while ($row = $auto_assign_result->fetch_assoc()) {
-        if ($row['setting_key'] == 'wp_conversion') {
-            $auto_assign_wp = (bool)$row['is_enabled'];
-        } elseif ($row['setting_key'] == 'golive') {
-            $auto_assign_golive = (bool)$row['is_enabled'];
-        }
-    }
-}
-
-$page_title = "QA Manager Dashboard";
+$page_title = "Admin Dashboard";
 include_once '../includes/header.php';
 ?>
 
@@ -175,46 +160,47 @@ include_once '../includes/header.php';
         </div>
     <?php endif; ?>
 
-    <!-- <div class="row">
+    <div class="row">
         <div class="col-12">
-            <h1 class="mb-4">QA Manager Dashboard</h1>
+            <h1 class="mb-4">Admin Dashboard</h1>
         </div>
-    </div> -->
+    </div>
 
     <!-- Stats Cards -->
-    <?php
-    // include_once '../includes/qa_manager/widgets/stats_cards.php';
-    ?>
+    <?php include_once '../includes/admin/widgets/stats_cards.php'; ?>
 
     <div class="row mt-4">
         <!-- Left Column -->
         <div class="col-md-4">
             <!-- Notifications Widget -->
-            <?php include_once '../includes/qa_manager/widgets/notifications.php'; ?>
+            <?php include_once '../includes/admin/widgets/notifications.php'; ?>
 
             <!-- Unassigned Projects Widget -->
-            <?php include_once '../includes/qa_manager/widgets/unassigned_projects.php'; ?>
+            <?php include_once '../includes/admin/widgets/unassigned_projects.php'; ?>
 
-            <!-- QA Reporter Workload Widget -->
-            <?php include_once '../includes/qa_manager/widgets/qa_reporter_workload.php'; ?>
+            <!-- NEW: Webmaster Workload Widget -->
+            <?php include_once '../includes/admin/widgets/webmaster_workload.php'; ?>
         </div>
 
         <!-- Right Column -->
         <div class="col-md-8">
+            <!-- Webmaster Projects Widget - NEW -->
+            <?php include_once '../includes/admin/widgets/webmaster_projects.php'; ?>
+
             <!-- QA Projects Tabs Widget -->
-            <?php include_once '../includes/qa_manager/widgets/qa_projects_tabs.php'; ?>
+            <?php include_once '../includes/admin/widgets/qa_projects_tabs.php'; ?>
         </div>
     </div>
 </div>
 
 <!-- QA Assignment Modal -->
-<?php include_once '../includes/qa_manager/modals/assign_qa_modal.php'; ?>
+<?php include_once '../includes/admin/modals/assign_qa_modal.php'; ?>
 
 <!-- Bootstrap JS Bundle with Popper -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 
-<!-- Custom scripts -->
-<script src="<?php echo BASE_URL; ?>/assets/js/qa-manager-main.js"></script>
+<!-- Custom scripts - Fixed to use relative path -->
+<script src="<?php echo BASE_URL; ?>/assets/js/admin-main.js"></script>
 
 <!-- Initialize modals -->
 <script>

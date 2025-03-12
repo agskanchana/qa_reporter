@@ -79,7 +79,7 @@ $total_unread = count($notifications) + count($new_projects) + count($missed_dea
                         $border_color = 'success';
                     }
                 ?>
-                    <div class="list-group-item p-3 border-start border-4 border-<?php echo $border_color; ?>">
+                    <div class="list-group-item p-3 border-start border-4 mt-1 mb-1 border-<?php echo $border_color; ?>">
                         <div class="d-flex align-items-center">
                             <div class="flex-shrink-0 me-3">
                                 <div class="avatar avatar-sm bg-light text-<?php echo $border_color; ?> rounded-circle">

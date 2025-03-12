@@ -103,7 +103,7 @@ $in_qa_count = $status_counts['in_qa_count'] ?? 0;
                     <?php foreach ($active_projects as $project): ?>
                     <tr>
                         <td>
-                            <a href="<?php echo BASE_URL; ?>/view_project.php?id=<?php echo $project['id']; ?>" class="text-decoration-none fw-medium">
+                            <a href="<?php echo BASE_URL; ?>view_project.php?id=<?php echo $project['id']; ?>" class="text-decoration-none fw-medium">
                                 <?php echo htmlspecialchars($project['name']); ?>
                             </a>
                             <div class="small text-muted">
@@ -195,7 +195,7 @@ $in_qa_count = $status_counts['in_qa_count'] ?? 0;
                             <?php endif; ?>
                         </td>
                         <td class="text-center">
-                            <a href="<?php echo BASE_URL; ?>/view_project.php?id=<?php echo $project['id']; ?>" class="btn btn-sm btn-primary">
+                            <a href="<?php echo BASE_URL; ?>view_project.php?id=<?php echo $project['id']; ?>" class="btn btn-sm btn-primary">
                                 <i class="bi bi-eye me-1"></i> View Details
                             </a>
                         </td>

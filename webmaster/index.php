@@ -32,12 +32,12 @@ include_once '../includes/header.php';
         </div>
     <?php endif; ?>
 
-    <div class="row mb-4">
+    <!-- <div class="row mb-4">
         <div class="col-12">
             <h1 class="h2 mb-0">Welcome, <?php echo htmlspecialchars($webmaster_name); ?></h1>
             <p class="text-muted">Webmaster Dashboard</p>
         </div>
-    </div>
+    </div> -->
 
     <div class="row">
         <!-- Left Column -->
