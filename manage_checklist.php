@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $query = "INSERT INTO checklist_items (title, stage, how_to_check, how_to_fix, created_by, display_order)
                          VALUES (?, ?, ?, ?, ?, ?)";
                 $stmt = $conn->prepare($query);
-                $stmt->bind_param("ssssi", $title, $stage, $how_to_check, $how_to_fix, $_SESSION['user_id'], $display_order);
+                $stmt->bind_param("ssssii", $title, $stage, $how_to_check, $how_to_fix, $_SESSION['user_id'], $display_order);
 
                 if ($stmt->execute()) {
                     syncProjectChecklist();
