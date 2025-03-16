@@ -270,7 +270,7 @@ $query = "SELECT ci.*, COALESCE(pcs.status, 'idle') as status,
           JOIN project_checklist_status pcs  -- Changed LEFT JOIN to JOIN to only show items in this project
               ON ci.id = pcs.checklist_item_id
               AND pcs.project_id = ?
-          ORDER BY ci.stage, ci.id";
+          ORDER BY ci.stage, ci.display_order, ci.title";  // Order by display_order instead of id
 $stmt = $conn->prepare($query);
 $stmt->bind_param("ii", $project_id, $project_id);
 $stmt->execute();
@@ -696,11 +696,15 @@ if (!empty($project_deadline)) {
                                     <div class="row">
                                         <div class="col-md-6">
                                             <h6>How to Check:</h6>
-                                            <p><?php echo nl2br(htmlspecialchars($item['how_to_check'])); ?></p>
+                                            <div class="rich-text-content border rounded p-3">
+                                                <?php echo $item['how_to_check']; ?>
+                                            </div>
                                         </div>
                                         <div class="col-md-6">
                                             <h6>How to Fix:</h6>
-                                            <p><?php echo nl2br(htmlspecialchars($item['how_to_fix'])); ?></p>
+                                            <div class="rich-text-content border rounded p-3">
+                                                <?php echo $item['how_to_fix']; ?>
+                                            </div>
                                         </div>
                                     </div>
 
