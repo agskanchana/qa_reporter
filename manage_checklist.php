@@ -189,7 +189,7 @@ require_once 'includes/header.php';
                             <thead>
                                 <tr>
                                     <th width="5%"><i class="bi bi-grip-vertical"></i></th>
-                                    <th>Title</th>
+                                    <th width="650px">Title</th>
                                     <th>Usage Count</th>
                                     <th>Created By</th>
                                     <th>Actions</th>
