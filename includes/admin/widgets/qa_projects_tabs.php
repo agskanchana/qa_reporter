@@ -101,7 +101,7 @@ $golive_projects = $conn->query($golive_projects_query)->fetch_all(MYSQLI_ASSOC)
                                 <?php foreach ($wp_conversion_projects as $project): ?>
                                 <tr>
                                     <td>
-                                        <a href="<?php echo BASE_URL; ?>/project_details.php?id=<?php echo $project['id']; ?>" class="text-decoration-none fw-medium">
+                                        <a href="<?php echo BASE_URL; ?>view_project.php?id=<?php echo $project['id']; ?>" class="text-decoration-none fw-medium">
                                             <?php echo htmlspecialchars($project['name']); ?>
                                         </a>
                                         <div class="small text-muted">
@@ -136,7 +136,7 @@ $golive_projects = $conn->query($golive_projects_query)->fetch_all(MYSQLI_ASSOC)
                                         </button>
                                         <?php else: ?>
                                         <div class="btn-group btn-group-sm" role="group">
-                                            <a href="<?php echo BASE_URL; ?>/project_details.php?id=<?php echo $project['id']; ?>" class="btn btn-outline-primary">
+                                            <a href="<?php echo BASE_URL; ?>view_project.php?id=<?php echo $project['id']; ?>" class="btn btn-outline-primary">
                                                 <i class="bi bi-eye"></i> View
                                             </a>
                                             <button type="button" class="btn btn-outline-secondary"
@@ -178,7 +178,7 @@ $golive_projects = $conn->query($golive_projects_query)->fetch_all(MYSQLI_ASSOC)
                                 <?php foreach ($page_creation_projects as $project): ?>
                                 <tr>
                                     <td>
-                                        <a href="<?php echo BASE_URL; ?>/project_details.php?id=<?php echo $project['id']; ?>" class="text-decoration-none fw-medium">
+                                        <a href="<?php echo BASE_URL; ?>view_project.php?id=<?php echo $project['id']; ?>" class="text-decoration-none fw-medium">
                                             <?php echo htmlspecialchars($project['name']); ?>
                                         </a>
                                         <div class="small text-muted">
@@ -213,7 +213,7 @@ $golive_projects = $conn->query($golive_projects_query)->fetch_all(MYSQLI_ASSOC)
                                         </button>
                                         <?php else: ?>
                                         <div class="btn-group btn-group-sm" role="group">
-                                            <a href="<?php echo BASE_URL; ?>/project_details.php?id=<?php echo $project['id']; ?>" class="btn btn-outline-primary">
+                                            <a href="<?php echo BASE_URL; ?>view_project.php?id=<?php echo $project['id']; ?>" class="btn btn-outline-primary">
                                                 <i class="bi bi-eye"></i> View
                                             </a>
                                             <button type="button" class="btn btn-outline-secondary"
@@ -255,7 +255,7 @@ $golive_projects = $conn->query($golive_projects_query)->fetch_all(MYSQLI_ASSOC)
                                 <?php foreach ($golive_projects as $project): ?>
                                 <tr>
                                     <td>
-                                        <a href="<?php echo BASE_URL; ?>/project_details.php?id=<?php echo $project['id']; ?>" class="text-decoration-none fw-medium">
+                                        <a href="<?php echo BASE_URL; ?>view_project.php?id=<?php echo $project['id']; ?>" class="text-decoration-none fw-medium">
                                             <?php echo htmlspecialchars($project['name']); ?>
                                         </a>
                                         <div class="small text-muted">
@@ -290,7 +290,7 @@ $golive_projects = $conn->query($golive_projects_query)->fetch_all(MYSQLI_ASSOC)
                                         </button>
                                         <?php else: ?>
                                         <div class="btn-group btn-group-sm" role="group">
-                                            <a href="<?php echo BASE_URL; ?>/project_details.php?id=<?php echo $project['id']; ?>" class="btn btn-outline-primary">
+                                            <a href="<?php echo BASE_URL; ?>view_project.php?id=<?php echo $project['id']; ?>" class="btn btn-outline-primary">
                                                 <i class="bi bi-eye"></i> View
                                             </a>
                                             <button type="button" class="btn btn-outline-secondary"

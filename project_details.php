@@ -2,6 +2,20 @@
 require_once 'includes/config.php';
 require_once 'includes/functions.php';
 
+// Add this function at the top of your file with other functions
+function cleanRichText($text) {
+    // Replace escaped quotes
+    $text = str_replace('\"', '"', $text);
+    $text = str_replace("\'", "'", $text);
+
+    // Handle case where entire content was htmlspecialchar'd before saving
+    if (strpos($text, '&lt;') !== false) {
+        $text = html_entity_decode($text);
+    }
+
+    return $text;
+}
+
 // Check if user is logged in
 if (!isLoggedIn()) {
     header("Location: login.php");
@@ -14,7 +28,8 @@ $user_role = getUserRole();
 // Get project details
 $query = "SELECT p.*, u.username as webmaster_name,
           COALESCE(p.current_status, 'wp_conversion') as current_status,
-          p.project_deadline, p.wp_conversion_deadline, p.created_at
+          p.project_deadline, p.wp_conversion_deadline, p.created_at,
+          p.admin_notes, p.webmaster_notes
           FROM projects p
           LEFT JOIN users u ON p.webmaster_id = u.id
           WHERE p.id = ?";
@@ -242,6 +257,55 @@ $statuses = !empty($project['current_status']) ? explode(',', $project['current_
         }
         .project-links a i {
             margin-right: 8px;
+        }
+        /* Add this to your existing styles */
+        .rich-text-content {
+            font-family: inherit;
+        }
+        .rich-text-content h1,
+        .rich-text-content h2,
+        .rich-text-content h3,
+        .rich-text-content h4,
+        .rich-text-content h5,
+        .rich-text-content h6 {
+            margin-top: 0.5em;
+            margin-bottom: 0.5em;
+        }
+        .rich-text-content p {
+            margin-bottom: 1em;
+        }
+        .rich-text-content ul,
+        .rich-text-content ol {
+            margin-top: 0;
+            margin-bottom: 1em;
+        }
+        .rich-text-content img {
+            max-width: 100%;
+            height: auto;
+        }
+        .rich-text-content pre {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 1em;
+            margin-bottom: 1em;
+        }
+        .rich-text-content blockquote {
+            border-left: 4px solid #dee2e6;
+            padding-left: 1em;
+            margin-left: 0;
+            color: #6c757d;
+        }
+        .rich-text-content table {
+            width: 100%;
+            max-width: 100%;
+            margin-bottom: 1em;
+            border-collapse: collapse;
+        }
+        .rich-text-content table td,
+        .rich-text-content table th {
+            padding: 0.5em;
+            border: 1px solid #dee2e6;
         }
     </style>
 </head>
@@ -600,13 +664,28 @@ $statuses = !empty($project['current_status']) ? explode(',', $project['current_
                     <div class="col-md-6">
                         <h5>Admin Notes</h5>
                         <div class="border rounded p-3">
-                            <?php echo !empty($project['admin_notes']) ? nl2br(htmlspecialchars($project['admin_notes'])) : 'No admin notes.'; ?>
+                            <?php if (!empty($project['admin_notes'])): ?>
+                                <div class="rich-text-content">
+                                    <?php echo cleanRichText($project['admin_notes']); ?>
+                                </div>
+                            <?php else: ?>
+                                <p class="text-muted">No admin notes.</p>
+                            <?php endif; ?>
                         </div>
                     </div>
                     <div class="col-md-6">
                         <h5>Webmaster Notes</h5>
                         <div class="border rounded p-3">
-                            <?php echo !empty($project['webmaster_notes']) ? nl2br(htmlspecialchars($project['webmaster_notes'])) : 'No webmaster notes.'; ?>
+                            <?php if (!empty($project['webmaster_notes'])): ?>
+                                <div class="rich-text-content">
+                                    <?php
+                                    // Output the content directly without htmlspecialchars
+                                    echo $project['webmaster_notes'];
+                                    ?>
+                                </div>
+                            <?php else: ?>
+                                <p class="text-muted">No webmaster notes.</p>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>

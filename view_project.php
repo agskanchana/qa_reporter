@@ -798,51 +798,56 @@ if (!empty($project_deadline)) {
         </div>
     </div>
 
-    <div class="row mt-4">
-        <div class="col-md-6">
-            <div class="card mb-3">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Admin Notes</h5>
-                </div>
-                <div class="card-body">
-                    <?php if (!empty($project['admin_notes'])): ?>
-                        <p><?php echo nl2br(htmlspecialchars($project['admin_notes'])); ?></p>
-                    <?php else: ?>
-                        <p class="text-muted">No admin notes available.</p>
-                    <?php endif; ?>
-
-                    <?php if ($user_role === 'admin'): ?>
-                    <button type="button" class="btn btn-sm btn-outline-primary"
-                            data-bs-toggle="modal" data-bs-target="#editAdminNotesModal">
-                        Edit Admin Notes
-                    </button>
-                    <?php endif; ?>
-                </div>
+    <!-- Replace the current Admin/Webmaster Notes display section -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Admin Notes</h5>
             </div>
-        </div>
+            <div class="card-body">
+                <?php if (!empty($project['admin_notes'])): ?>
+                    <div class="rich-text-content">
+                        <?php echo $project['admin_notes']; ?>
+                    </div>
+                <?php else: ?>
+                    <p class="text-muted">No admin notes available.</p>
+                <?php endif; ?>
 
-        <div class="col-md-6">
-            <div class="card mb-3">
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0">Webmaster Notes</h5>
-                </div>
-                <div class="card-body">
-                    <?php if (!empty($project['webmaster_notes'])): ?>
-                        <p><?php echo nl2br(htmlspecialchars($project['webmaster_notes'])); ?></p>
-                    <?php else: ?>
-                        <p class="text-muted">No webmaster notes available.</p>
-                    <?php endif; ?>
-
-                    <?php if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id']): ?>
-                    <button type="button" class="btn btn-sm btn-outline-success"
-                            data-bs-toggle="modal" data-bs-target="#editWebmasterNotesModal">
-                        Edit Webmaster Notes
-                    </button>
-                    <?php endif; ?>
-                </div>
+                <?php if ($user_role === 'admin'): ?>
+                <button type="button" class="btn btn-sm btn-outline-primary"
+                        data-bs-toggle="modal" data-bs-target="#editAdminNotesModal">
+                    Edit Admin Notes
+                </button>
+                <?php endif; ?>
             </div>
         </div>
     </div>
+
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">Webmaster Notes</h5>
+            </div>
+            <div class="card-body">
+                <?php if (!empty($project['webmaster_notes'])): ?>
+                    <div class="rich-text-content">
+                        <?php echo $project['webmaster_notes']; ?>
+                    </div>
+                <?php else: ?>
+                    <p class="text-muted">No webmaster notes available.</p>
+                <?php endif; ?>
+
+                <?php if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id']): ?>
+                <button type="button" class="btn btn-sm btn-outline-success"
+                        data-bs-toggle="modal" data-bs-target="#editWebmasterNotesModal">
+                    Edit Webmaster Notes
+                </button>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
 </div>
 <?php
 $current_user_query = "SELECT username FROM users WHERE id = ?";
@@ -856,7 +861,7 @@ $current_user = $current_user_result->fetch_assoc();
 <!-- Admin Notes Modal -->
 <?php if ($user_role === 'admin'): ?>
 <div class="modal fade" id="editAdminNotesModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Edit Admin Notes</h5>
@@ -867,14 +872,15 @@ $current_user = $current_user_result->fetch_assoc();
                     <input type="hidden" name="project_id" value="<?php echo $project_id; ?>">
                     <input type="hidden" name="note_type" value="admin">
 
-                    <div class="mb-3">
-                        <label for="admin_notes" class="form-label">Admin Notes</label>
-                        <textarea class="form-control" id="admin_notes" name="notes" rows="6"><?php echo htmlspecialchars($project['admin_notes'] ?? ''); ?></textarea>
-                    </div>
+                    <!-- Hidden textarea to store HTML content -->
+                    <textarea class="d-none" id="admin_notes" name="notes"><?php echo $project['admin_notes'] ?? ''; ?></textarea>
+
+                    <!-- Quill editor container -->
+                    <div id="admin_notes_editor" class="quill-editor"></div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Notes</button>
+                    <button type="submit" class="btn btn-primary" id="admin-notes-submit">Save Notes</button>
                 </div>
             </form>
         </div>
@@ -885,7 +891,7 @@ $current_user = $current_user_result->fetch_assoc();
 <!-- Webmaster Notes Modal -->
 <?php if ($user_role === 'webmaster' && $project['webmaster_id'] == $_SESSION['user_id']): ?>
 <div class="modal fade" id="editWebmasterNotesModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Edit Webmaster Notes</h5>
@@ -896,14 +902,15 @@ $current_user = $current_user_result->fetch_assoc();
                     <input type="hidden" name="project_id" value="<?php echo $project_id; ?>">
                     <input type="hidden" name="note_type" value="webmaster">
 
-                    <div class="mb-3">
-                        <label for="webmaster_notes" class="form-label">Webmaster Notes</label>
-                        <textarea class="form-control" id="webmaster_notes" name="notes" rows="6"><?php echo htmlspecialchars($project['webmaster_notes'] ?? ''); ?></textarea>
-                    </div>
+                    <!-- Hidden textarea to store HTML content -->
+                    <textarea class="d-none" id="webmaster_notes" name="notes"><?php echo $project['webmaster_notes'] ?? ''; ?></textarea>
+
+                    <!-- Quill editor container -->
+                    <div id="webmaster_notes_editor" class="quill-editor"></div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Notes</button>
+                    <button type="submit" class="btn btn-primary" id="webmaster-notes-submit">Save Notes</button>
                 </div>
             </form>
         </div>
@@ -957,6 +964,52 @@ $current_user = $current_user_result->fetch_assoc();
     </div>
 </div>
 <?php endif; ?>
+
+<!-- Add Quill editor CSS in the head section -->
+<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+
+<!-- Add these styles to the existing style section -->
+<style>
+    /* Add this to your existing styles */
+    .quill-editor {
+        height: 300px;
+        margin-bottom: 15px;
+    }
+    .rich-text-content {
+        font-family: inherit;
+    }
+    .rich-text-content h1,
+    .rich-text-content h2,
+    .rich-text-content h3,
+    .rich-text-content h4,
+    .rich-text-content h5,
+    .rich-text-content h6 {
+        margin-top: 0.5em;
+        margin-bottom: 0.5em;
+    }
+    .rich-text-content p {
+        margin-bottom: 1em;
+    }
+    .rich-text-content ul,
+    .rich-text-content ol {
+        margin-top: 0;
+        margin-bottom: 1em;
+        padding-left: 2em;
+    }
+    .rich-text-content img {
+        max-width: 100%;
+        height: auto;
+    }
+    .rich-text-content a {
+        color: #0d6efd;
+    }
+    .rich-text-content blockquote {
+        border-left: 4px solid #dee2e6;
+        padding-left: 1em;
+        margin-left: 0;
+        color: #6c757d;
+    }
+</style>
 
 <!-- Then continue with the existing script tags -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -1244,6 +1297,72 @@ document.querySelectorAll('form[data-status-form]').forEach(form => {
         });
     });
 });
+</script>
+
+<!-- Add Quill.js before the closing body tag -->
+<script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Only initialize if admin modal exists
+        if (document.getElementById('admin_notes_editor')) {
+            // Initialize editor for admin notes
+            const adminEditor = new Quill('#admin_notes_editor', {
+                theme: 'snow',
+                modules: {
+                    toolbar: [
+                        ['bold', 'italic', 'underline', 'strike'],
+                        [{'color': []}, {'background': []}],
+                        [{'list': 'ordered'}, {'list': 'bullet'}],
+                        [{'align': []}],
+                        ['link'],
+                        ['clean']
+                    ]
+                },
+                placeholder: 'Add administrator notes here...'
+            });
+
+            // Set initial content from textarea
+            const adminNotesContent = document.getElementById('admin_notes').value;
+            if (adminNotesContent) {
+                adminEditor.root.innerHTML = adminNotesContent;
+            }
+
+            // Update hidden textarea before form submission
+            document.getElementById('admin-notes-submit').addEventListener('click', function() {
+                document.getElementById('admin_notes').value = adminEditor.root.innerHTML;
+            });
+        }
+
+        // Only initialize if webmaster modal exists
+        if (document.getElementById('webmaster_notes_editor')) {
+            // Initialize editor for webmaster notes
+            const webmasterEditor = new Quill('#webmaster_notes_editor', {
+                theme: 'snow',
+                modules: {
+                    toolbar: [
+                        ['bold', 'italic', 'underline', 'strike'],
+                        [{'color': []}, {'background': []}],
+                        [{'list': 'ordered'}, {'list': 'bullet'}],
+                        [{'align': []}],
+                        ['link'],
+                        ['clean']
+                    ]
+                },
+                placeholder: 'Add webmaster notes here...'
+            });
+
+            // Set initial content from textarea
+            const webmasterNotesContent = document.getElementById('webmaster_notes').value;
+            if (webmasterNotesContent) {
+                webmasterEditor.root.innerHTML = webmasterNotesContent;
+            }
+
+            // Update hidden textarea before form submission
+            document.getElementById('webmaster-notes-submit').addEventListener('click', function() {
+                document.getElementById('webmaster_notes').value = webmasterEditor.root.innerHTML;
+            });
+        }
+    });
 </script>
 </body>
 </html>
