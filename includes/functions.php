@@ -671,3 +671,25 @@ function checkAndAutoAssignToAdmin($project_id, $stage) {
         return false;
     }
 }
+
+/**
+ * Properly formats text content from Quill editor that may contain newline characters
+ */
+function formatQuillContent($content) {
+    // Replace \r\n with <br> for proper line breaks
+    $content = str_replace(['\r\n', '\n', '\r'], '<br>', $content);
+
+    // Handle cases where content might be encoded twice
+    if (strpos($content, '&lt;') !== false) {
+        $content = html_entity_decode($content);
+    }
+
+    // If the content doesn't contain any HTML tags but has <br> now,
+    // wrap it in <p> tags for proper formatting
+    if (!preg_match('/<[^<>]+>/', $content) && strpos($content, '<br>') !== false) {
+        $content = '<p>' . $content . '</p>';
+        $content = str_replace('<br><br>', '</p><p>', $content);
+    }
+
+    return $content;
+}

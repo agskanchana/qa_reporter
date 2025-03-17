@@ -697,13 +697,13 @@ if (!empty($project_deadline)) {
                                         <div class="col-md-6">
                                             <h6>How to Check:</h6>
                                             <div class="rich-text-content border rounded p-3">
-                                                <?php echo $item['how_to_check']; ?>
+                                                <?php echo formatQuillContent($item['how_to_check']); ?>
                                             </div>
                                         </div>
                                         <div class="col-md-6">
                                             <h6>How to Fix:</h6>
                                             <div class="rich-text-content border rounded p-3">
-                                                <?php echo $item['how_to_fix']; ?>
+                                                <?php echo formatQuillContent($item['how_to_fix']); ?>
                                             </div>
                                         </div>
                                     </div>
