@@ -1,2 +1,2 @@
 <?php
-return '1.2.8';
+return '1.3.0';
