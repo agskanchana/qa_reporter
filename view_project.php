@@ -753,39 +753,43 @@ if (!empty($project_deadline)) {
                                     </form>
 
                                     <!-- Comments Section -->
+<div class="comments-section">
+    <?php
+    $comments_query = "SELECT c.*, u.username, u.role FROM comments c
+                    JOIN users u ON c.user_id = u.id
+                    WHERE c.project_id = ? AND c.checklist_item_id = ?
+                    ORDER BY c.created_at DESC";
+    $stmt = $conn->prepare($comments_query);
+    $stmt->bind_param("ii", $project['id'], $item['id']);
+    $stmt->execute();
+    $comments = $stmt->get_result();
 
-                                    <div class="comments-section">
-                                        <?php
-                                        $comments_query = "SELECT c.*, u.username, u.role FROM comments c
-                                                        JOIN users u ON c.user_id = u.id
-                                                        WHERE c.project_id = ? AND c.checklist_item_id = ?
-                                                        ORDER BY c.created_at DESC";
-                                        $stmt = $conn->prepare($comments_query);
-                                        $stmt->bind_param("ii", $project['id'], $item['id']);
-                                        $stmt->execute();
-                                        $comments = $stmt->get_result();
+    while ($comment = $comments->fetch_assoc()):
+        // Set alert class based on user role
+        $alertClass = 'alert-secondary'; // Default value
+        if ($comment['role'] === 'webmaster') {
+            $alertClass = 'alert-primary';
+        } elseif ($comment['role'] === 'qa_reporter' || $comment['role'] === 'qa_manager') {
+            $alertClass = 'alert-warning';
+        } elseif ($comment['role'] === 'admin') {
+            $alertClass = 'alert-info';
+        }
 
-                                        while ($comment = $comments->fetch_assoc()):
-                                            // Set alert class based on user role
-                                            $alertClass = 'alert-secondary'; // Default value
-                                            if ($comment['role'] === 'webmaster') {
-                                                $alertClass = 'alert-primary';
-                                            } elseif ($comment['role'] === 'qa_reporter' || $comment['role'] === 'qa_manager') {
-                                                $alertClass = 'alert-warning';
-                                            } elseif ($comment['role'] === 'admin') {
-                                                $alertClass = 'alert-info';
-                                            }
-                                        ?>
-                                            <div class="alert <?php echo $alertClass; ?> mb-2">
-                                                <p class="mb-1"><?php echo htmlspecialchars($comment['comment']); ?></p>
-                                                <small>
-                                                    By <?php echo htmlspecialchars($comment['username']); ?>
-                                                    (<?php echo ucfirst($comment['role']); ?>) -
-                                                    <?php echo date('Y-m-d H:i:s', strtotime($comment['created_at'])); ?>
-                                                </small>
-                                            </div>
-                                        <?php endwhile; ?>
-                                    </div>
+        // Format the comment text to handle newlines correctly
+        $commentText = str_replace(['\r\n', '\n', '\r'], '<br>', $comment['comment']);
+    ?>
+        <div class="alert <?php echo $alertClass; ?> mb-2">
+            <div class="comment-text">
+                <?php echo formatComment($comment['comment']); ?>
+            </div>
+            <small>
+                By <?php echo htmlspecialchars($comment['username']); ?>
+                (<?php echo ucfirst($comment['role']); ?>) -
+                <?php echo date('Y-m-d H:i:s', strtotime($comment['created_at'])); ?>
+            </small>
+        </div>
+    <?php endwhile; ?>
+</div>
 
 
                                 </div>
@@ -1254,24 +1258,32 @@ document.querySelectorAll('form[data-status-form]').forEach(form => {
                 setTimeout(() => alert.remove(), 3000);
 
                 // If comment was added, append it to comments section
-                const commentText = this.querySelector('textarea[name="comment"]');
-                if (commentText.value.trim()) {
-                    const commentsSection = itemRow.querySelector('.comments-section');
-                    if (commentsSection) {
-                        const newComment = document.createElement('div');
-                        newComment.className = 'card mb-2 mt-2';
-                        newComment.innerHTML = `
-                            <div class="card-body">
-                                <p class="card-text">${commentText.value}</p>
-                                <small class="text-muted">
-                                    By ${currentUserName} just now
-                                </small>
-                            </div>
-                        `;
-                        commentsSection.insertBefore(newComment, commentsSection.firstChild);
-                        commentText.value = '';
-                    }
-                }
+const commentText = this.querySelector('textarea[name="comment"]');
+if (commentText.value.trim()) {
+    const commentsSection = itemRow.querySelector('.comments-section');
+    if (commentsSection) {
+        // Format the comment text for display
+        const formattedComment = commentText.value.replace(/\n/g, '<br>');
+
+        // Create appropriate alert class based on user role
+        let alertClass = 'alert-secondary';
+        // You could add logic here to set different classes based on user role
+
+        const newComment = document.createElement('div');
+        newComment.className = `alert ${alertClass} mb-2`;
+        newComment.innerHTML = `
+            <div class="comment-text">
+                ${formattedComment}
+            </div>
+            <small>
+                By ${currentUserName} just now
+            </small>
+        `;
+        commentsSection.insertBefore(newComment, commentsSection.firstChild);
+        commentText.value = '';
+    }
+}
+
             } else {
                 // Show error message
                 const alert = document.createElement('div');

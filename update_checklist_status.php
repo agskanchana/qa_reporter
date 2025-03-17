@@ -200,6 +200,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         // Add comment if provided
         if ($comment) {
+            // Store newlines consistently
+            $comment = str_replace(["\r\n", "\r"], "\n", $comment);
+
             $query = "INSERT INTO comments (project_id, checklist_item_id, user_id, comment)
                      VALUES (?, ?, ?, ?)";
             $stmt = $conn->prepare($query);

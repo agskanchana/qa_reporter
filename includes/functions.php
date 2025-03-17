@@ -693,3 +693,14 @@ function formatQuillContent($content) {
 
     return $content;
 }
+
+/**
+ * Format comment text to properly display newlines and special characters
+ */
+function formatComment($comment) {
+    // Replace escaped sequences with proper line breaks
+    $comment = str_replace(['\r\n', '\n', '\r'], PHP_EOL, $comment);
+
+    // Return with nl2br to convert newlines to <br> tags
+    return nl2br(htmlspecialchars($comment));
+}
